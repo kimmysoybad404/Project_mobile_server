@@ -13,3 +13,5 @@ con.connect((err) => {
     console.log("DB connected successfully");
   }
 });
+
+module.exports = con;

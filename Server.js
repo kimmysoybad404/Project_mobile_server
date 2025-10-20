@@ -1,4 +1,3 @@
-module.exports = con;
 const con = require("./DataBase");
 const express = require("express");
 const bcrypt = require("bcrypt");
