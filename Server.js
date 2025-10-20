@@ -1,4 +1,4 @@
-const con = require("./DataBase");
+const con = require("./db.js");
 const express = require("express");
 const bcrypt = require("bcrypt");
 const session = require("express-session");
