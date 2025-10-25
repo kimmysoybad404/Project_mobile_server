@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Host: 127.0.0.1
--- Generation Time: Oct 20, 2025 at 03:55 PM
+-- Generation Time: Oct 25, 2025 at 07:47 PM
 -- Server version: 10.4.32-MariaDB
 -- PHP Version: 8.2.12
 
@@ -35,15 +35,17 @@ CREATE TABLE `history` (
   `ReturnDate` date NOT NULL,
   `BorrowBy` smallint(5) UNSIGNED NOT NULL,
   `ApproveBy` smallint(5) UNSIGNED NOT NULL,
-  `ReceiveBy` smallint(5) UNSIGNED DEFAULT NULL
+  `ReceiveBy` smallint(5) UNSIGNED DEFAULT NULL,
+  `RejectBy` smallint(5) UNSIGNED DEFAULT NULL,
+  `RejectReason` varchar(255) DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --
 -- Dumping data for table `history`
 --
 
-INSERT INTO `history` (`ID`, `AssetID`, `AssetName`, `BorrowDate`, `ReturnDate`, `BorrowBy`, `ApproveBy`, `ReceiveBy`) VALUES
-(2, 1, 'Notebook', '2025-10-18', '2025-10-19', 4, 5, 6);
+INSERT INTO `history` (`ID`, `AssetID`, `AssetName`, `BorrowDate`, `ReturnDate`, `BorrowBy`, `ApproveBy`, `ReceiveBy`, `RejectBy`, `RejectReason`) VALUES
+(2, 1, 'Notebook', '2025-10-18', '2025-10-19', 4, 5, 6, NULL, NULL);
 
 --
 -- Triggers `history`
