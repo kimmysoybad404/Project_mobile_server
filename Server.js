@@ -1,20 +1,25 @@
 const con = require("./db.js");
 const express = require("express");
-const bcrypt = require("bcrypt");
 const session = require("express-session");
+const { hash, verify } = require("@node-rs/argon2");
 const app = express();
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-app.get("/password/:pass", (req, res) => {
-  const password = req.params.pass;
-  bcrypt.hash(password, 10, function (err, hash) {
-    if (err) {
-      return res.status(500).send("Hashing error");
-    }
-    res.send(hash);
-  });
+app.get("/password/:pass", async (req, res) => {
+  try {
+    const hashed = await hash(req.params.pass, {
+      type: 2,
+      memoryCost: 2 ** 16,
+      timeCost: 3,
+      parallelism: 1,
+    });
+    res.send(hashed);
+  } catch (err) {
+    console.error(err);
+    res.status(500).send("Hashing error");
+  }
 });
 
 app.post("/Login", (req, res) => {
@@ -25,20 +30,29 @@ app.post("/Login", (req, res) => {
     [username],
     async (err, result) => {
       if (err) return res.status(500).json({ Message: "Database error" });
-      if (result.length == 0)
+      if (result.length === 0)
         return res.status(400).json({ Message: "User not found" });
 
       const user = result[0];
 
-      const Checkpassword = await bcrypt.compare(password, user.Password);
+      try {
+        const valid = await verify(user.Password, password);
 
-      if (!Checkpassword)
-        return res.status(400).json({ Message: "Incorrect Password" });
+        if (!valid)
+          return res.status(400).json({ Message: "Incorrect Password" });
 
-      res.json({
-        Message: "Login Successful",
-        user: { id: user.UserID, name: user.Name, role: user.Role },
-      });
+        res.json({
+          Message: "Login Successful",
+          user: {
+            id: user.UserID,
+            name: user.Name,
+            role: Number(user.Role),
+          },
+        });
+      } catch (error) {
+        console.error("Argon2 verify error:", error);
+        res.status(500).json({ Message: "Password verification failed" });
+      }
     }
   );
 });
@@ -59,7 +73,13 @@ app.post("/Register", async (req, res) => {
         if (result.length > 0)
           return res.status(400).json({ Message: "Username already exists" });
 
-        const hashedPassword = await bcrypt.hash(password, 10);
+        const hashedPassword = await hash(password, {
+          type: 2,
+          memoryCost: 2 ** 16,
+          timeCost: 3,
+          parallelism: 1,
+        });
+
         const role = 1;
 
         con.query(
@@ -78,6 +98,7 @@ app.post("/Register", async (req, res) => {
       }
     );
   } catch (error) {
+    console.error(error);
     res.status(500).json({ Message: "Internal Server Error" });
   }
 });
