@@ -103,22 +103,32 @@ app.post("/Register", async (req, res) => {
   }
 });
 
+app.get("/storage", (req, res) => {
+  const sql = "SELECT * FROM storage";
+  con.query(sql, (err, result) => {
+    if (err) return res.status(500).json({ Message: "Database error" });
+    res.status(200).json(result);
+  });
+});
 
-app.post('/update-storage', async (req, res) => {
-
+app.post("/update-storage", async (req, res) => {
   const { id, status, borrowDate, returnDate, borrowBy } = req.body;
 
   if (!id || !status || !borrowDate || !returnDate || !borrowBy) {
-    return res.status(400).json({ message: 'Missing required fields' });
+    return res.status(400).json({ message: "Missing required fields" });
   }
 
   try {
-    const checkPending = "SELECT * FROM `history` WHERE `BorrowBy` = ? AND `Borrowdate` = CURDATE()";
-    const [checkResults] = await con.promise().query(checkPending, [id]);
+    const checkPending =
+      "SELECT * FROM `history` WHERE `BorrowBy` = ? AND `Borrowdate` = CURDATE()";
+    const [checkResults] = await con.promise().query(checkPending, [borrowBy]);
 
     if (checkResults.length == 0) {
-      const updateQuery = "UPDATE `storage` SET `Status` = ? WHERE `ID` = ? AND `Status` = 'Available'";
-      const [updateResults] = await con.promise().query(updateQuery, [status, id]);
+      const updateQuery =
+        "UPDATE `storage` SET `Status` = ? WHERE `ID` = ? AND `Status` = 'Available'";
+      const [updateResults] = await con
+        .promise()
+        .query(updateQuery, [status, id]);
 
       if (updateResults.affectedRows > 0) {
         const historyQuery = `
@@ -128,54 +138,62 @@ app.post('/update-storage', async (req, res) => {
           (?, ?, ?, ?);
       `;
 
-        await con.promise().query(historyQuery, [id, borrowDate, returnDate, borrowBy]);
-        return res.json({ message: 'Update successful and history logged', affectedRows: updateResults.affectedRows });
+        await con
+          .promise()
+          .query(historyQuery, [id, borrowDate, returnDate, borrowBy]);
+        return res.json({
+          message: "Update successful and history logged",
+          affectedRows: updateResults.affectedRows,
+        });
       }
 
       const selectQuery = "SELECT `Status` FROM `storage` WHERE `ID` = ?";
       const [rows] = await con.promise().query(selectQuery, [id]);
 
       if (rows.length === 0) {
-        return res.status(404).json('Error: Cannot find item in storage');
+        return res.status(404).json("Error: Cannot find item in storage");
       } else {
-        return res.status(409).json(`Item is not available (Current status: ${rows[0].Status})`);
+        return res
+          .status(409)
+          .json(`Item is not available (Current status: ${rows[0].Status})`);
       }
-    }else{
-        return res.status(400).json('User already pending request');
+    } else {
+      return res.status(400).json("User already pending request");
     }
-
-
-
   } catch (error) {
-    console.error('Error in /update-storage:', error);
-    return res.status(500).json('Server error');
+    console.error("Error in /update-storage:", error);
+    return res.status(500).json("Server error");
   }
 });
 
-app.get('/get-status/:id', (req, res) => {
+app.get("/get-status/:id", (req, res) => {
   const { id } = req.params;
 
-  con.query("SELECT Status FROM storage WHERE ID = ?", [id], (error, results) => {
-    if (error) {
-      console.error('Error executing query:', error);
-      return res.status(500).json({ message: 'Database query error' });
-    }
+  con.query(
+    "SELECT Status FROM storage WHERE ID = ?",
+    [id],
+    (error, results) => {
+      if (error) {
+        console.error("Error executing query:", error);
+        return res.status(500).json({ message: "Database query error" });
+      }
 
-    if (results.length === 0) {
-      return res.status(404).json({ message: 'Item not found' });
-    }
+      if (results.length === 0) {
+        return res.status(404).json({ message: "Item not found" });
+      }
 
-    res.json({ status: results[0].Status });
-  });
+      res.json({ status: results[0].Status });
+    }
+  );
 });
 
-app.get('/user-requests/:userId', async (req, res) => {
+app.get("/user-requests/:userId", async (req, res) => {
   const { userId } = req.params;
-  
+
   console.log(`Received request for user ID: ${userId}`);
 
   if (!userId) {
-    return res.status(400).json({ message: 'User ID is required' });
+    return res.status(400).json({ message: "User ID is required" });
   }
 
   try {
@@ -197,15 +215,14 @@ app.get('/user-requests/:userId', async (req, res) => {
       JOIN storage s ON h.AssetID = s.ID
       WHERE h.BorrowBy = ? AND h.BorrowDate = CURDATE()
     `;
-    
+
     const [rows] = await con.promise().query(query, [userId]);
-    
+
     console.log(`Database query returned ${rows.length} rows.`);
     res.json(rows);
-
   } catch (error) {
-    console.error('Error fetching requests:', error);
-    res.status(500).json({ message: 'Server error' });
+    console.error("Error fetching requests:", error);
+    res.status(500).json({ message: "Server error" });
   }
 });
 
