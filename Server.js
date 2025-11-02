@@ -103,6 +103,63 @@ app.post("/Register", async (req, res) => {
   }
 });
 
+
+app.post('/update-storage', async (req, res) => {
+
+  const { id, status, borrowDate, returnDate, borrowBy } = req.body;
+
+  if (!id || !status || !borrowDate || !returnDate || !borrowBy) {
+    return res.status(400).json({ message: 'Missing required fields' });
+  }
+
+  try {
+    const updateQuery = "UPDATE `storage` SET `Status` = ? WHERE `ID` = ? AND `Status` = 'Available'";
+    const [updateResults] = await con.promise().query(updateQuery, [status, id]);
+
+    if (updateResults.affectedRows > 0) {
+      const historyQuery = `
+        INSERT INTO \`history\` 
+          (\`AssetID\`, \`BorrowDate\`, \`ReturnDate\`, \`BorrowBy\`) 
+        VALUES 
+          (?, ?, ?, ?);
+      `;
+
+      await con.promise().query(historyQuery, [id, borrowDate, returnDate, borrowBy]);
+      return res.json({ message: 'Update successful and history logged', affectedRows: updateResults.affectedRows });
+    }
+    
+    const selectQuery = "SELECT `Status` FROM `storage` WHERE `ID` = ?";
+    const [rows] = await con.promise().query(selectQuery, [id]);
+
+    if (rows.length === 0) {
+      return res.status(404).json({ message: 'Error: Cannot find item in storage' });
+    } else {
+      return res.status(409).json({ message: `Item is not available (Current status: ${rows[0].Status})` });
+    }
+
+  } catch (error) {
+    console.error('Error in /update-storage:', error);
+    return res.status(500).json({ message: 'Server error' });
+  }
+});
+
+app.get('/get-status/:id', (req, res) => {
+  const { id } = req.params;
+
+  con.query("SELECT Status FROM storage WHERE ID = ?", [id], (error, results) => {
+    if (error) {
+      console.error('Error executing query:', error);
+      return res.status(500).json({ message: 'Database query error' });
+    }
+
+    if (results.length === 0) {
+      return res.status(404).json({ message: 'Item not found' });
+    }
+
+    res.json({ status: results[0].Status });
+  });
+});
+
 const PORT = 3000;
 app.listen(PORT, () => {
   console.log(`🚀 Server running at http://localhost:${PORT}`);
