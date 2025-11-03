@@ -104,12 +104,19 @@ app.post("/Register", async (req, res) => {
 });
 
 app.get("/storage", (req, res) => {
-  const sql = "SELECT * FROM storage";
+  const search = req.query.q; // รับค่าที่ส่งมาจาก Flutter เช่น ?q=notebook
+  let sql = "SELECT * FROM storage";
+
+  if (search) {
+    sql += ` WHERE name LIKE '%${search}%'`; // เพิ่มเงื่อนไขค้นหา
+  }
+
   con.query(sql, (err, result) => {
     if (err) return res.status(500).json({ Message: "Database error" });
     res.status(200).json(result);
   });
 });
+
 
 app.post("/update-storage", async (req, res) => {
   const { id, status, borrowDate, returnDate, borrowBy } = req.body;
