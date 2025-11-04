@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Host: 127.0.0.1
--- Generation Time: Nov 02, 2025 at 06:50 PM
+-- Generation Time: Nov 04, 2025 at 01:51 PM
 -- Server version: 10.4.32-MariaDB
 -- PHP Version: 8.2.12
 
@@ -45,9 +45,9 @@ CREATE TABLE `history` (
 --
 
 INSERT INTO `history` (`ID`, `AssetID`, `AssetName`, `BorrowDate`, `ReturnDate`, `BorrowBy`, `ApproveBy`, `ReceiveBy`, `RejectBy`, `RejectReason`) VALUES
-(9, 1, 'Notebook', '2025-11-02', '2025-11-03', 4, NULL, NULL, NULL, NULL),
-(10, 3, 'Apple_pencil_2', '2025-11-03', '2025-11-04', 4, NULL, NULL, NULL, NULL),
-(11, 2, 'Apple_pencil_1', '2025-11-03', '2025-11-04', 8, NULL, NULL, NULL, NULL);
+(31, 1, 'Notebook', '2025-11-02', '2025-11-03', 4, NULL, NULL, 0, 'Auto-rejected: Request expired'),
+(32, 12, 'Powerbank', '2025-11-01', '2025-11-02', 4, NULL, NULL, 0, 'Auto-rejected: Request expired'),
+(37, 1, 'Notebook', '2025-11-04', '2025-11-05', 4, NULL, NULL, NULL, NULL);
 
 --
 -- Triggers `history`
@@ -80,17 +80,17 @@ CREATE TABLE `storage` (
 
 INSERT INTO `storage` (`ID`, `Name`, `imageName`, `Status`) VALUES
 (1, 'Notebook', 'notebook.png', 'Pending'),
-(2, 'Apple_pencil_1', 'apple_pencil_1.png', 'Pending'),
-(3, 'Apple_pencil_2', 'apple_pencil_2.png', 'Pending'),
+(2, 'Apple_pencil_1', 'apple_pencil_1.png', 'Available'),
+(3, 'Apple_pencil_2', 'apple_pencil_2.png', 'Available'),
 (4, 'Apple_pencil_3', 'apple_pencil_3.png', 'Available'),
 (5, 'Board_games', 'Board_games.png', 'Available'),
 (6, 'Boardgame', 'boardgame.png', 'Available'),
 (7, 'Camera', 'Camera.png', 'Available'),
-(8, 'Ipad', 'ipad.png', 'Available'),
+(8, 'Ipad', 'ipad.png', 'Pending'),
 (9, 'Mouse', 'Mouse.png', 'Available'),
 (10, 'Phone', 'Phone.png', 'Available'),
 (11, 'Phone_2', 'Phone_2.png', 'Available'),
-(12, 'Powerbank', 'powerbank.png', 'Available');
+(12, 'Powerbank', 'powerbank.png', 'Pending');
 
 -- --------------------------------------------------------
 
@@ -129,7 +129,8 @@ ALTER TABLE `history`
   ADD KEY `AssetID` (`AssetID`,`AssetName`,`BorrowBy`,`ApproveBy`,`ReceiveBy`),
   ADD KEY `BorrowBy` (`BorrowBy`,`ApproveBy`,`ReceiveBy`),
   ADD KEY `ApproveBy` (`ApproveBy`),
-  ADD KEY `ReceiveBy` (`ReceiveBy`);
+  ADD KEY `ReceiveBy` (`ReceiveBy`),
+  ADD KEY `RejectBy` (`RejectBy`);
 
 --
 -- Indexes for table `storage`
@@ -151,7 +152,7 @@ ALTER TABLE `userdata`
 -- AUTO_INCREMENT for table `history`
 --
 ALTER TABLE `history`
-  MODIFY `ID` smallint(5) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=12;
+  MODIFY `ID` smallint(5) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=38;
 
 --
 -- AUTO_INCREMENT for table `storage`
@@ -176,19 +177,20 @@ ALTER TABLE `history`
   ADD CONSTRAINT `assetid_ibfk_1` FOREIGN KEY (`AssetID`) REFERENCES `storage` (`ID`),
   ADD CONSTRAINT `history_ibfk_1` FOREIGN KEY (`ApproveBy`) REFERENCES `userdata` (`UserID`),
   ADD CONSTRAINT `history_ibfk_2` FOREIGN KEY (`BorrowBy`) REFERENCES `userdata` (`UserID`),
-  ADD CONSTRAINT `history_ibfk_3` FOREIGN KEY (`ReceiveBy`) REFERENCES `userdata` (`UserID`);
+  ADD CONSTRAINT `history_ibfk_3` FOREIGN KEY (`ReceiveBy`) REFERENCES `userdata` (`UserID`),
+  ADD CONSTRAINT `history_ibfk_4` FOREIGN KEY (`RejectBy`) REFERENCES `userdata` (`UserID`);
 
 DELIMITER $$
 --
 -- Events
 --
-CREATE DEFINER=`root`@`localhost` EVENT `auto_reject_expired_requests` ON SCHEDULE EVERY 1 DAY STARTS '2025-11-04 01:00:00' ON COMPLETION NOT PRESERVE ENABLE DO UPDATE history
+CREATE DEFINER=`root`@`localhost` EVENT `auto_reject_expired_requests` ON SCHEDULE EVERY 1 HOUR STARTS '2025-11-02 01:00:00' ON COMPLETION NOT PRESERVE ENABLE DO UPDATE history
   SET
-      RejectBy = 0, -- 👈 ตั้งค่า ID ของ "System" (ดูข้อ 3)
+      RejectBy = 0, -- ???? ตั้งค่า ID ของ "System" (ดูข้อ 3)
       RejectReason = 'Auto-rejected: Request expired'
   WHERE
-      BorrowDate < CURDATE()     -- 👈 1. ถ้าวันที่ยืมคือน้อยกว่าวันนี้ (คือเมื่อวานนี้ หรือเก่ากว่า)
-      AND ApproveBy IS NULL    -- 👈 2. และยังไม่ถูกอนุมัติ
+      BorrowDate < CURDATE()     -- ???? 1. ถ้าวันที่ยืมคือน้อยกว่าวันนี้ (คือเมื่อวานนี้ หรือเก่ากว่า)
+      AND ApproveBy IS NULL    -- ???? 2. และยังไม่ถูกอนุมัติ
       AND RejectBy IS NULL$$
 
 DELIMITER ;
