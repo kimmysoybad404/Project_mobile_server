@@ -247,16 +247,17 @@ app.get("/history/:userId", async (req, res) => {
         h.ReceiveBy,
         h.RejectBy,
         h.RejectReason,
-        h.Status AS status,
         approver.Name AS approverName,
         receiver.Name AS receiverName
+        /* ❌ เราไม่จำเป็นต้องใช้ h.Status อีกต่อไป */
       FROM history h
       JOIN storage s ON h.AssetID = s.ID
       LEFT JOIN userdata approver ON h.ApproveBy = approver.UserID
       LEFT JOIN userdata receiver ON h.ReceiveBy = receiver.UserID
       WHERE 
         h.BorrowBy = ? 
-        AND h.Status != 'Pending'  -- ✅<-- เพิ่มบรรทัดนี้โดยที
+        /* ✅ Logic ใหม่: ดึงเฉพาะรายการที่มีการดำเนินการแล้ว */
+        AND (h.ApproveBy IS NOT NULL OR h.ReceiveBy IS NOT NULL OR h.RejectBy IS NOT NULL)
       ORDER BY h.ID DESC
     `;
 
@@ -267,7 +268,6 @@ app.get("/history/:userId", async (req, res) => {
     res.status(500).json({ message: "Server error" });
   }
 });
-
 // ... (โค้ดเดิมของคุณ) ...
 const PORT = 3000;
 app.listen(PORT, () => {
