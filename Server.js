@@ -248,15 +248,15 @@ app.get("/history/:userId", async (req, res) => {
         h.RejectBy,
         h.RejectReason,
         approver.Name AS approverName,
-        receiver.Name AS receiverName
-        /* ❌ เราไม่จำเป็นต้องใช้ h.Status อีกต่อไป */
+        receiver.Name AS receiverName,
+        rejecter.Name AS rejecterName   /* ✅ 1. เพิ่มบรรทัดนี้ */
       FROM history h
       JOIN storage s ON h.AssetID = s.ID
       LEFT JOIN userdata approver ON h.ApproveBy = approver.UserID
       LEFT JOIN userdata receiver ON h.ReceiveBy = receiver.UserID
+      LEFT JOIN userdata rejecter ON h.RejectBy = rejecter.UserID /* ✅ 2. เพิ่มบรรทัดนี้ */
       WHERE 
         h.BorrowBy = ? 
-        /* ✅ Logic ใหม่: ดึงเฉพาะรายการที่มีการดำเนินการแล้ว */
         AND (h.ApproveBy IS NOT NULL OR h.ReceiveBy IS NOT NULL OR h.RejectBy IS NOT NULL)
       ORDER BY h.ID DESC
     `;
