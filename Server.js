@@ -233,6 +233,49 @@ app.get("/user-requests/:userId", async (req, res) => {
   }
 });
 
+app.get("/history/:userId", async (req, res) => {
+  const { userId } = req.params;
+
+  if (!userId) {
+    return res.status(400).json({ message: "User ID is required" });
+  }
+
+  try {
+    const query = `
+      SELECT 
+        h.ID AS id,
+        h.AssetID AS assetID,
+        h.AssetName AS assetName,
+        CONCAT('assets/images/', s.imageName) AS image,
+        h.BorrowDate,
+        h.ReturnDate,
+        h.BorrowBy,
+        h.ApproveBy,
+        h.ReceiveBy,
+        h.RejectBy,
+        h.RejectReason,
+        approver.Name AS approverName,
+        receiver.Name AS receiverName,
+        rejecter.Name AS rejecterName   /* ✅ 1. เพิ่มบรรทัดนี้ */
+      FROM history h
+      JOIN storage s ON h.AssetID = s.ID
+      LEFT JOIN userdata approver ON h.ApproveBy = approver.UserID
+      LEFT JOIN userdata receiver ON h.ReceiveBy = receiver.UserID
+      LEFT JOIN userdata rejecter ON h.RejectBy = rejecter.UserID /* ✅ 2. เพิ่มบรรทัดนี้ */
+      WHERE 
+        h.BorrowBy = ? 
+        AND (h.ApproveBy IS NOT NULL OR h.ReceiveBy IS NOT NULL OR h.RejectBy IS NOT NULL)
+      ORDER BY h.ID DESC
+    `;
+
+    const [rows] = await con.promise().query(query, [userId]);
+    res.json(rows);
+  } catch (error) {
+    console.error("Error fetching history:", error);
+    res.status(500).json({ message: "Server error" });
+  }
+});
+// ... (โค้ดเดิมของคุณ) ...
 const PORT = 3000;
 app.listen(PORT, () => {
   console.log(`🚀 Server running at http://localhost:${PORT}`);
