@@ -127,7 +127,7 @@ app.post("/update-storage", async (req, res) => {
 
   try {
     const checkPending =
-      "SELECT * FROM `history` WHERE `BorrowBy` = ? AND `Borrowdate` = CURDATE()";
+      "SELECT * FROM `history` WHERE `BorrowBy` = ? AND DATE(Borrowdate) = CURDATE()";
     const [checkResults] = await con.promise().query(checkPending, [borrowBy]);
 
     if (checkResults.length == 0) {
@@ -215,6 +215,7 @@ app.get("/user-requests/:userId", async (req, res) => {
         h.BorrowDate,
         h.ReturnDate,
         h.BorrowBy,
+        h.ApproveBy,
         h.ReceiveBy,
         h.RejectBy,
         h.RejectReason
