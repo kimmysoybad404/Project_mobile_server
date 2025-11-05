@@ -104,18 +104,35 @@ app.post("/Register", async (req, res) => {
 });
 
 app.get("/storage", (req, res) => {
-  const search = req.query.q; // รับค่าที่ส่งมาจาก Flutter เช่น ?q=notebook
-  let sql = "SELECT * FROM storage";
+  const search = req.query.q; 
+  console.log("📩 Search received:", search); // ✅ เพิ่มบรรทัดนี้
 
-  if (search) {
-    sql += ` WHERE name LIKE '%${search}%'`; // เพิ่มเงื่อนไขค้นหา
+  let sql = "SELECT * FROM storage";
+  if (search && search.trim() !== "") {
+    const searchNumber = parseInt(search);
+    if (!isNaN(searchNumber)) {
+      sql += ` WHERE ID = ${searchNumber} OR Name LIKE '%${search}%'`;
+    } else {
+      sql += ` WHERE Name LIKE '%${search}%'`;
+    }
   }
 
+  console.log("🧠 SQL:", sql); // ✅ ดูคำสั่ง SQL จริงที่รัน
+
   con.query(sql, (err, result) => {
-    if (err) return res.status(500).json({ Message: "Database error" });
+    if (err) {
+      console.error("Database error:", err);
+      return res.status(500).json({ message: "Database error", error: err });
+    }
     res.status(200).json(result);
   });
 });
+
+
+
+
+
+
 
 
 app.post("/update-storage", async (req, res) => {
@@ -234,15 +251,21 @@ app.get("/user-requests/:userId", async (req, res) => {
   }
 });
 
+
+
+// **************************************************************************************************************************************************************
+
+
 app.get("/history/:userId", async (req, res) => {
   const { userId } = req.params;
+  const search = (req.query.search || "").trim().toLowerCase();
 
   if (!userId) {
     return res.status(400).json({ message: "User ID is required" });
   }
 
   try {
-    const query = `
+    let query = `
       SELECT 
         h.ID AS id,
         h.AssetID AS assetID,
@@ -257,27 +280,81 @@ app.get("/history/:userId", async (req, res) => {
         h.RejectReason,
         approver.Name AS approverName,
         receiver.Name AS receiverName,
-        rejecter.Name AS rejecterName   /* ✅ 1. เพิ่มบรรทัดนี้ */
+        rejecter.Name AS rejecterName
       FROM history h
       JOIN storage s ON h.AssetID = s.ID
       LEFT JOIN userdata approver ON h.ApproveBy = approver.UserID
       LEFT JOIN userdata receiver ON h.ReceiveBy = receiver.UserID
-      LEFT JOIN userdata rejecter ON h.RejectBy = rejecter.UserID /* ✅ 2. เพิ่มบรรทัดนี้ */
+      LEFT JOIN userdata rejecter ON h.RejectBy = rejecter.UserID
       WHERE 
-        h.BorrowBy = ? 
+        h.BorrowBy = ?
         AND (h.ApproveBy IS NOT NULL OR h.ReceiveBy IS NOT NULL OR h.RejectBy IS NOT NULL)
-      ORDER BY h.ID DESC
     `;
 
-    const [rows] = await con.promise().query(query, [userId]);
+    const params = [userId];
+
+    // ✅ ถ้ามีการค้นหา
+    if (search) {
+      const searchYear = parseInt(search);
+      let yearAD = null;
+      let yearBE = null;
+
+      // 🔹 ถ้าเป็นปี พ.ศ. → แปลงเป็น ค.ศ.
+      if (!isNaN(searchYear) && searchYear > 2400) {
+        yearAD = searchYear - 543;
+        yearBE = searchYear;
+      }
+      // 🔹 ถ้าเป็นปี ค.ศ. → แปลงเป็น พ.ศ.
+      else if (!isNaN(searchYear) && searchYear > 1900 && searchYear < 2400) {
+        yearAD = searchYear;
+        yearBE = searchYear + 543;
+      }
+
+      query += `
+        AND (
+          LOWER(h.AssetName) LIKE ? OR
+          LOWER(h.ID) LIKE ? OR
+
+          -- ✅ ค้นหาวันที่แบบ dd/mm/yyyy (ค.ศ.)
+          DATE_FORMAT(h.BorrowDate, '%d/%m/%Y') LIKE ? OR
+          DATE_FORMAT(h.ReturnDate, '%d/%m/%Y') LIKE ? OR
+
+          -- ✅ ค้นหาวันที่แบบ dd/mm/yyyy (พ.ศ.)
+          DATE_FORMAT(DATE_ADD(h.BorrowDate, INTERVAL 543 YEAR), '%d/%m/%Y') LIKE ? OR
+          DATE_FORMAT(DATE_ADD(h.ReturnDate, INTERVAL 543 YEAR), '%d/%m/%Y') LIKE ? OR
+
+          -- ✅ ค้นหาปี (ทั้ง พ.ศ. / ค.ศ.)
+          YEAR(h.BorrowDate) LIKE ? OR
+          YEAR(h.ReturnDate) LIKE ? OR
+          YEAR(h.BorrowDate) LIKE ? OR
+          YEAR(h.ReturnDate) LIKE ?
+        )
+      `;
+
+      params.push(
+        `%${search}%`, `%${search}%`,     // assetName, id
+        `%${search}%`, `%${search}%`,     // ค.ศ.
+        `%${search}%`, `%${search}%`,     // พ.ศ.
+        `%${yearAD || searchYear}%`, `%${yearAD || searchYear}%`,
+        `%${yearBE || searchYear}%`, `%${yearBE || searchYear}%`
+      );
+    }
+
+    query += " ORDER BY h.ID DESC";
+
+    console.log("🧠 SQL:", query);
+    console.log("🧩 Params:", params);
+
+    const [rows] = await con.promise().query(query, params);
     res.json(rows);
   } catch (error) {
     console.error("Error fetching history:", error);
     res.status(500).json({ message: "Server error" });
   }
 });
-// ... (โค้ดเดิมของคุณ) ...
+
 const PORT = 3000;
 app.listen(PORT, () => {
   console.log(`🚀 Server running at http://localhost:${PORT}`);
 });
+
