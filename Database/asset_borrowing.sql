@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Host: 127.0.0.1
--- Generation Time: Nov 04, 2025 at 01:51 PM
+-- Generation Time: Nov 07, 2025 at 02:22 PM
 -- Server version: 10.4.32-MariaDB
 -- PHP Version: 8.2.12
 
@@ -33,6 +33,7 @@ CREATE TABLE `history` (
   `AssetName` varchar(20) DEFAULT NULL,
   `BorrowDate` date NOT NULL,
   `ReturnDate` date NOT NULL,
+  `ActualReturnDate` date DEFAULT NULL,
   `BorrowBy` smallint(5) UNSIGNED NOT NULL,
   `ApproveBy` smallint(5) UNSIGNED DEFAULT NULL,
   `ReceiveBy` smallint(5) UNSIGNED DEFAULT NULL,
@@ -44,10 +45,10 @@ CREATE TABLE `history` (
 -- Dumping data for table `history`
 --
 
-INSERT INTO `history` (`ID`, `AssetID`, `AssetName`, `BorrowDate`, `ReturnDate`, `BorrowBy`, `ApproveBy`, `ReceiveBy`, `RejectBy`, `RejectReason`) VALUES
-(31, 1, 'Notebook', '2025-11-02', '2025-11-03', 4, NULL, NULL, 0, 'Auto-rejected: Request expired'),
-(32, 12, 'Powerbank', '2025-11-01', '2025-11-02', 4, NULL, NULL, 0, 'Auto-rejected: Request expired'),
-(37, 1, 'Notebook', '2025-11-04', '2025-11-05', 4, NULL, NULL, NULL, NULL);
+INSERT INTO `history` (`ID`, `AssetID`, `AssetName`, `BorrowDate`, `ReturnDate`, `ActualReturnDate`, `BorrowBy`, `ApproveBy`, `ReceiveBy`, `RejectBy`, `RejectReason`) VALUES
+(31, 1, 'Notebook', '2025-11-02', '2025-11-03', NULL, 4, NULL, NULL, 0, 'Auto-rejected: Request expired'),
+(32, 12, 'Powerbank', '2025-11-01', '2025-11-02', NULL, 4, NULL, NULL, 0, 'Auto-rejected: Request expired'),
+(39, 8, 'Ipad', '2025-11-04', '2025-11-05', NULL, 4, 5, NULL, NULL, NULL);
 
 --
 -- Triggers `history`
@@ -79,18 +80,18 @@ CREATE TABLE `storage` (
 --
 
 INSERT INTO `storage` (`ID`, `Name`, `imageName`, `Status`) VALUES
-(1, 'Notebook', 'notebook.png', 'Pending'),
-(2, 'Apple_pencil_1', 'apple_pencil_1.png', 'Available'),
-(3, 'Apple_pencil_2', 'apple_pencil_2.png', 'Available'),
-(4, 'Apple_pencil_3', 'apple_pencil_3.png', 'Available'),
-(5, 'Board_games', 'Board_games.png', 'Available'),
+(1, 'Notebook', 'notebook.png', 'Borrowed'),
+(2, 'Apple_pencil_1', 'apple_pencil_1.png', 'Pending'),
+(3, 'Apple_pencil_2', 'apple_pencil_2.png', 'Disabled'),
+(4, 'Apple_pencil_3', 'apple_pencil_3.png', 'Borrowed'),
+(5, 'Board_games', 'Board_games.png', 'Pending'),
 (6, 'Boardgame', 'boardgame.png', 'Available'),
 (7, 'Camera', 'Camera.png', 'Available'),
 (8, 'Ipad', 'ipad.png', 'Pending'),
 (9, 'Mouse', 'Mouse.png', 'Available'),
 (10, 'Phone', 'Phone.png', 'Available'),
 (11, 'Phone_2', 'Phone_2.png', 'Available'),
-(12, 'Powerbank', 'powerbank.png', 'Pending');
+(12, 'Powerbank', 'powerbank.png', 'Available');
 
 -- --------------------------------------------------------
 
@@ -152,7 +153,7 @@ ALTER TABLE `userdata`
 -- AUTO_INCREMENT for table `history`
 --
 ALTER TABLE `history`
-  MODIFY `ID` smallint(5) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=38;
+  MODIFY `ID` smallint(5) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=40;
 
 --
 -- AUTO_INCREMENT for table `storage`
