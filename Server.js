@@ -104,7 +104,7 @@ app.post("/Register", async (req, res) => {
 });
 
 app.get("/storage", (req, res) => {
-  const search = req.query.q; 
+  const search = req.query.q;
   console.log("📩 Search received:", search); // ✅ เพิ่มบรรทัดนี้
 
   let sql = "SELECT * FROM storage";
@@ -128,13 +128,6 @@ app.get("/storage", (req, res) => {
   });
 });
 
-
-
-
-
-
-
-
 app.post("/update-storage", async (req, res) => {
   const { id, status, borrowDate, returnDate, borrowBy } = req.body;
 
@@ -156,15 +149,12 @@ app.post("/update-storage", async (req, res) => {
 
       if (updateResults.affectedRows > 0) {
         const historyQuery = `
-        INSERT INTO \`history\` 
-          (\`AssetID\`, \`BorrowDate\`, \`ReturnDate\`, \`BorrowBy\`) 
-        VALUES 
-          (?, ?, ?, ?);
-      `;
-
+  INSERT INTO history (AssetID, AssetName, BorrowDate, ReturnDate, BorrowBy)
+  VALUES (?, (SELECT Name FROM storage WHERE ID = ?), ?, ?, ?)
+`;
         await con
           .promise()
-          .query(historyQuery, [id, borrowDate, returnDate, borrowBy]);
+          .query(historyQuery, [id, id, borrowDate, returnDate, borrowBy]);
         return res.json({
           message: "Update successful and history logged",
           affectedRows: updateResults.affectedRows,
@@ -231,6 +221,7 @@ app.get("/user-requests/:userId", async (req, res) => {
         
         h.BorrowDate,
         h.ReturnDate,
+        h.ActualReturnDate,
         h.BorrowBy,
         h.ApproveBy,
         h.ReceiveBy,
@@ -251,10 +242,7 @@ app.get("/user-requests/:userId", async (req, res) => {
   }
 });
 
-
-
 // **************************************************************************************************************************************************************
-
 
 app.get("/history/:userId", async (req, res) => {
   const { userId } = req.params;
@@ -273,6 +261,7 @@ app.get("/history/:userId", async (req, res) => {
         CONCAT('assets/images/', s.imageName) AS image,
         h.BorrowDate,
         h.ReturnDate,
+        h.ActualReturnDate,
         h.BorrowBy,
         h.ApproveBy,
         h.ReceiveBy,
@@ -318,25 +307,35 @@ app.get("/history/:userId", async (req, res) => {
           -- ✅ ค้นหาวันที่แบบ dd/mm/yyyy (ค.ศ.)
           DATE_FORMAT(h.BorrowDate, '%d/%m/%Y') LIKE ? OR
           DATE_FORMAT(h.ReturnDate, '%d/%m/%Y') LIKE ? OR
+          DATE_FORMAT(h.ActualReturnDate, '%d/%m/%Y') LIKE ? OR
+          
 
           -- ✅ ค้นหาวันที่แบบ dd/mm/yyyy (พ.ศ.)
           DATE_FORMAT(DATE_ADD(h.BorrowDate, INTERVAL 543 YEAR), '%d/%m/%Y') LIKE ? OR
           DATE_FORMAT(DATE_ADD(h.ReturnDate, INTERVAL 543 YEAR), '%d/%m/%Y') LIKE ? OR
+          DATE_FORMAT(DATE_ADD(h.ActualReturnDate, INTERVAL 543 YEAR), '%d/%m/%Y') LIKE ? OR
 
           -- ✅ ค้นหาปี (ทั้ง พ.ศ. / ค.ศ.)
           YEAR(h.BorrowDate) LIKE ? OR
           YEAR(h.ReturnDate) LIKE ? OR
+          YEAR(h.ActualReturnDate) LIKE ? OR
           YEAR(h.BorrowDate) LIKE ? OR
           YEAR(h.ReturnDate) LIKE ?
+          YEAR(h.ActualReturnDate) LIKE ?
         )
       `;
 
       params.push(
-        `%${search}%`, `%${search}%`,     // assetName, id
-        `%${search}%`, `%${search}%`,     // ค.ศ.
-        `%${search}%`, `%${search}%`,     // พ.ศ.
-        `%${yearAD || searchYear}%`, `%${yearAD || searchYear}%`,
-        `%${yearBE || searchYear}%`, `%${yearBE || searchYear}%`
+        `%${search}%`,
+        `%${search}%`, // assetName, id
+        `%${search}%`,
+        `%${search}%`, // ค.ศ.
+        `%${search}%`,
+        `%${search}%`, // พ.ศ.
+        `%${yearAD || searchYear}%`,
+        `%${yearAD || searchYear}%`,
+        `%${yearBE || searchYear}%`,
+        `%${yearBE || searchYear}%`
       );
     }
 
@@ -357,4 +356,3 @@ const PORT = 3000;
 app.listen(PORT, () => {
   console.log(`🚀 Server running at http://localhost:${PORT}`);
 });
-
