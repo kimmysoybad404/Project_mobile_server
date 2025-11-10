@@ -341,8 +341,6 @@ app.get("/history/:userId", async (req, res) => {
 
     query += " ORDER BY h.ID DESC";
 
-   
-
     const [rows] = await con.promise().query(query, params);
     res.json(rows);
   } catch (error) {
@@ -391,41 +389,45 @@ app.get("/history-all", async (req, res) => {
 
     if (search) {
       query += `
-        AND (
-          LOWER(h.AssetName) LIKE ? OR
-          LOWER(borrower.Name) LIKE ? OR
-          LOWER(approver.Name) LIKE ? OR
-          LOWER(receiver.Name) LIKE ? OR
-          LOWER(rejecter.Name) LIKE ? OR
-          LOWER(h.ID) LIKE ? OR
-          LOWER(s.Status) LIKE ? OR
+    AND (
+      LOWER(h.AssetName) LIKE ? OR
+      LOWER(borrower.Name) LIKE ? OR
+      LOWER(approver.Name) LIKE ? OR
+      LOWER(receiver.Name) LIKE ? OR
+      LOWER(rejecter.Name) LIKE ? OR
+      CAST(h.ID AS CHAR) LIKE ? OR        -- ✅ ใช้แค่ h.ID
+      LOWER(s.Status) LIKE ? OR
 
-          -- 🔍 ค้นหาวันที่แบบ dd/mm/yyyy
-          DATE_FORMAT(h.BorrowDate, '%d/%m/%Y') LIKE ? OR
-          DATE_FORMAT(h.ReturnDate, '%d/%m/%Y') LIKE ? OR
-          DATE_FORMAT(h.ActualReturnDate, '%d/%m/%Y') LIKE ? OR
+      -- 🔍 ค้นหาวันที่แบบ dd/mm/yyyy
+      DATE_FORMAT(h.BorrowDate, '%d/%m/%Y') LIKE ? OR
+      DATE_FORMAT(h.ReturnDate, '%d/%m/%Y') LIKE ? OR
+      DATE_FORMAT(h.ActualReturnDate, '%d/%m/%Y') LIKE ? OR
 
-          -- 🔍 ค้นหาวันที่แบบ พ.ศ.
-          DATE_FORMAT(DATE_ADD(h.BorrowDate, INTERVAL 543 YEAR), '%d/%m/%Y') LIKE ? OR
-          DATE_FORMAT(DATE_ADD(h.ReturnDate, INTERVAL 543 YEAR), '%d/%m/%Y') LIKE ? OR
-          DATE_FORMAT(DATE_ADD(h.ActualReturnDate, INTERVAL 543 YEAR), '%d/%m/%Y') LIKE ?
-        )
-      `;
+      -- 🔍 ค้นหาวันที่แบบ พ.ศ.
+      DATE_FORMAT(DATE_ADD(h.BorrowDate, INTERVAL 543 YEAR), '%d/%m/%Y') LIKE ? OR
+      DATE_FORMAT(DATE_ADD(h.ReturnDate, INTERVAL 543 YEAR), '%d/%m/%Y') LIKE ? OR
+      DATE_FORMAT(DATE_ADD(h.ActualReturnDate, INTERVAL 543 YEAR), '%d/%m/%Y') LIKE ?
+    )
+  `;
 
       params.push(
-        `%${search}%`, // asset name
-        `%${search}%`, // borrower name
-        `%${search}%`, // approver name
-        `%${search}%`, // receiver name
-        `%${search}%`, // rejecter name
-        `%${search}%`, // id
-        `%${search}%`, // status
-        `%${search}%`, `%${search}%`, `%${search}%`, // ค.ศ.
-        `%${search}%`, `%${search}%`, `%${search}%`  // พ.ศ.
+        `%${search}%`, // h.AssetName
+        `%${search}%`, // borrower.Name
+        `%${search}%`, // approver.Name
+        `%${search}%`, // receiver.Name
+        `%${search}%`, // rejecter.Name
+        `%${search}%`, // ✅ h.ID (แทน AssetID)
+        `%${search}%`, // s.Status
+        `%${search}%`, // BorrowDate
+        `%${search}%`, // ReturnDate
+        `%${search}%`, // ActualReturnDate
+        `%${search}%`, // BorrowDate (พ.ศ.)
+        `%${search}%`, // ReturnDate (พ.ศ.)
+        `%${search}%` // ActualReturnDate (พ.ศ.)
       );
     }
 
-    query += " ORDER BY h.ID DESC";
+    query += " ORDER BY h.ID ASC";
 
     const [rows] = await con.promise().query(query, params);
     res.status(200).json(rows);
@@ -434,8 +436,6 @@ app.get("/history-all", async (req, res) => {
     res.status(500).json({ message: "Server error" });
   }
 });
-
-
 
 const PORT = 3000;
 app.listen(PORT, () => {
