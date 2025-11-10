@@ -105,7 +105,6 @@ app.post("/Register", async (req, res) => {
 
 app.get("/storage", (req, res) => {
   const search = req.query.q;
-  console.log("📩 Search received:", search); // ✅ เพิ่มบรรทัดนี้
 
   let sql = "SELECT * FROM storage";
   if (search && search.trim() !== "") {
@@ -117,7 +116,6 @@ app.get("/storage", (req, res) => {
     }
   }
 
-  console.log("🧠 SQL:", sql); // ✅ ดูคำสั่ง SQL จริงที่รัน
 
   con.query(sql, (err, result) => {
     if (err) {
@@ -204,8 +202,6 @@ app.get("/get-status/:id", (req, res) => {
 app.get("/user-requests/:userId", async (req, res) => {
   const { userId } = req.params;
 
-  console.log(`Received request for user ID: ${userId}`);
-
   if (!userId) {
     return res.status(400).json({ message: "User ID is required" });
   }
@@ -234,7 +230,6 @@ app.get("/user-requests/:userId", async (req, res) => {
 
     const [rows] = await con.promise().query(query, [userId]);
 
-    console.log(`Database query returned ${rows.length} rows.`);
     res.json(rows);
   } catch (error) {
     console.error("Error fetching requests:", error);
@@ -433,11 +428,13 @@ app.get("/history-all", async (req, res) => {
     res.status(200).json(rows);
   } catch (error) {
     console.error("Error fetching all history:", error);
-app.get("/api/pending-requests", async (req, res) => {
-  const search = (req.query.search || "").trim().toLowerCase();
+  }
+}),
+  app.get("/api/pending-requests", async (req, res) => {
+    const search = (req.query.search || "").trim().toLowerCase();
 
-  try {
-    let query = `
+    try {
+      let query = `
       SELECT 
         h.ID AS id,
         h.AssetName AS assetName,
@@ -455,24 +452,27 @@ app.get("/api/pending-requests", async (req, res) => {
         h.ApproveBy IS NULL 
         AND h.RejectBy IS NULL
     `;
-    
-    const params = [];
 
-    if (search) {
-      const searchYear = parseInt(search);
-      let yearAD = null;
-      let yearBE = null;
+      const params = [];
 
-      if (!isNaN(searchYear) && searchYear > 2400) {
-        yearAD = searchYear - 543;
-        yearBE = searchYear;
-      }
-      else if (!isNaN(searchYear) && searchYear > 1900 && searchYear < 2400) {
-        yearAD = searchYear;
-        yearBE = searchYear + 543;
-      }
+      if (search) {
+        const searchYear = parseInt(search);
+        let yearAD = null;
+        let yearBE = null;
 
-      query += `
+        if (!isNaN(searchYear) && searchYear > 2400) {
+          yearAD = searchYear - 543;
+          yearBE = searchYear;
+        } else if (
+          !isNaN(searchYear) &&
+          searchYear > 1900 &&
+          searchYear < 2400
+        ) {
+          yearAD = searchYear;
+          yearBE = searchYear + 543;
+        }
+
+        query += `
         AND (
           LOWER(h.AssetName) LIKE ? OR
           LOWER(h.ID) LIKE ? OR
@@ -491,45 +491,44 @@ app.get("/api/pending-requests", async (req, res) => {
           (YEAR(h.BorrowDate) = ? OR YEAR(h.ReturnDate) = ?)
         )
       `;
-      
-      const searchPattern = `%${search}%`;
-      params.push(
-        searchPattern, // assetName
-        searchPattern, // id
-        searchPattern, // borrowerName
-        searchPattern, // date AD
-        searchPattern, // date AD
-        searchPattern, // date BE
-        searchPattern, // date BE
-        yearAD || -1, // year AD
-        yearAD || -1, // year AD
-        yearBE || -1, // year BE
-        yearBE || -1  // year BE
-      );
+
+        const searchPattern = `%${search}%`;
+        params.push(
+          searchPattern, // assetName
+          searchPattern, // id
+          searchPattern, // borrowerName
+          searchPattern, // date AD
+          searchPattern, // date AD
+          searchPattern, // date BE
+          searchPattern, // date BE
+          yearAD || -1, // year AD
+          yearAD || -1, // year AD
+          yearBE || -1, // year BE
+          yearBE || -1 // year BE
+        );
+      }
+
+      query += " ORDER BY h.BorrowDate ASC, h.ID ASC";
+
+      const [rows] = await con.promise().query(query, params);
+      const results = rows.map((row) => ({
+        ...row,
+        image: row.image.split("/").pop(),
+      }));
+
+      res.json(results);
+    } catch (error) {
+      console.error("Error fetching pending requests:", error);
+      res.status(500).json({ message: "Server error" });
     }
-
-    query += " ORDER BY h.BorrowDate ASC, h.ID ASC";
-
-    const [rows] = await con.promise().query(query, params);
-    const results = rows.map(row => ({
-      ...row,
-      image: row.image.split('/').pop()
-    }));
-    
-    res.json(results);
-
-  } catch (error) {
-    console.error("Error fetching pending requests:", error);
-    res.status(500).json({ message: "Server error" });
-  }
-});
+  });
 
 app.post("/api/requests/:id/approve", async (req, res) => {
   const { id } = req.params;
   const { lenderId } = req.body;
-  
+
   if (!lenderId) {
-     return res.status(400).json({ message: "Lender ID is required" });
+    return res.status(400).json({ message: "Lender ID is required" });
   }
 
   try {
@@ -543,7 +542,9 @@ app.post("/api/requests/:id/approve", async (req, res) => {
     );
 
     if (result.affectedRows === 0) {
-      return res.status(404).json({ message: "Request not found or already processed" });
+      return res
+        .status(404)
+        .json({ message: "Request not found or already processed" });
     }
 
     res.json({ message: "Request approved successfully" });
@@ -558,10 +559,12 @@ app.post("/api/requests/:id/reject", async (req, res) => {
   const { reason, lenderId } = req.body;
 
   if (!lenderId) {
-     return res.status(400).json({ message: "Lender ID is required" });
+    return res.status(400).json({ message: "Lender ID is required" });
   }
   if (!reason || reason.trim() === "") {
-    return res.status(400).json({ message: "Reason is required for rejection" });
+    return res
+      .status(400)
+      .json({ message: "Reason is required for rejection" });
   }
 
   try {
@@ -576,7 +579,9 @@ app.post("/api/requests/:id/reject", async (req, res) => {
     );
 
     if (result.affectedRows === 0) {
-      return res.status(404).json({ message: "Request not found or already processed" });
+      return res
+        .status(404)
+        .json({ message: "Request not found or already processed" });
     }
 
     res.json({ message: "Request rejected successfully" });
