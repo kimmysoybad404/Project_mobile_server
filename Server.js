@@ -351,13 +351,13 @@ app.get("/history/:userId", async (req, res) => {
   }
 });
 
-
+// ********************************************************************************************************************************
 app.get("/history-all", async (req, res) => {
   try {
     const search = (req.query.search || "").trim().toLowerCase();
 
     let query = `
-      SELECT 
+     SELECT 
         h.ID AS id,
         h.AssetID AS assetID,
         h.AssetName AS assetName,
@@ -380,7 +380,10 @@ app.get("/history-all", async (req, res) => {
       LEFT JOIN userdata approver ON h.ApproveBy = approver.UserID
       LEFT JOIN userdata receiver ON h.ReceiveBy = receiver.UserID
       LEFT JOIN userdata rejecter ON h.RejectBy = rejecter.UserID
-      WHERE 1
+      WHERE 
+        h.ApproveBy IS NOT NULL
+        OR h.ReceiveBy IS NOT NULL
+        OR h.RejectBy IS NOT NULL
     `;
 
     const params = [];
@@ -415,6 +418,7 @@ app.get("/history-all", async (req, res) => {
     res.status(500).json({ message: "Server error" });
   }
 });
+
 
 const PORT = 3000;
 app.listen(PORT, () => {
