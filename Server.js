@@ -341,9 +341,6 @@ app.get("/history/:userId", async (req, res) => {
 
     query += " ORDER BY h.ID DESC";
 
-    console.log("🧠 SQL:", query);
-    console.log("🧩 Params:", params);
-
     const [rows] = await con.promise().query(query, params);
     res.json(rows);
   } catch (error) {
@@ -352,6 +349,90 @@ app.get("/history/:userId", async (req, res) => {
   }
 });
 
+// ********************************************************************************************************************************
+app.get("/history-all", async (req, res) => {
+  try {
+    const search = (req.query.search || "").trim().toLowerCase();
+
+    let query = `
+     SELECT 
+        h.ID AS id,
+        h.AssetID AS assetID,
+        h.AssetName AS assetName,
+        CONCAT('assets/images/', s.imageName) AS image,
+        h.BorrowDate,
+        h.ReturnDate,
+        h.ActualReturnDate,
+        h.BorrowBy,
+        h.ApproveBy,
+        h.ReceiveBy,
+        h.RejectBy,
+        h.RejectReason,
+        s.Status AS status, -- ✅ ดึงสถานะจาก storage
+        borrower.Name AS borrowerName,
+        approver.Name AS approverName,
+        receiver.Name AS receiverName,
+        rejecter.Name AS rejecterName
+      FROM history h
+      JOIN storage s ON h.AssetID = s.ID
+      LEFT JOIN userdata borrower ON h.BorrowBy = borrower.UserID
+      LEFT JOIN userdata approver ON h.ApproveBy = approver.UserID
+      LEFT JOIN userdata receiver ON h.ReceiveBy = receiver.UserID
+      LEFT JOIN userdata rejecter ON h.RejectBy = rejecter.UserID
+      WHERE 
+        h.ApproveBy IS NOT NULL
+        OR h.ReceiveBy IS NOT NULL
+        OR h.RejectBy IS NOT NULL
+    `;
+
+    const params = [];
+
+    if (search) {
+      query += `
+    AND (
+      LOWER(h.AssetName) LIKE ? OR
+      LOWER(borrower.Name) LIKE ? OR
+      LOWER(approver.Name) LIKE ? OR
+      LOWER(receiver.Name) LIKE ? OR
+      LOWER(rejecter.Name) LIKE ? OR
+      CAST(h.ID AS CHAR) LIKE ? OR        -- ✅ ใช้แค่ h.ID
+      LOWER(s.Status) LIKE ? OR
+
+      -- 🔍 ค้นหาวันที่แบบ dd/mm/yyyy
+      DATE_FORMAT(h.BorrowDate, '%d/%m/%Y') LIKE ? OR
+      DATE_FORMAT(h.ReturnDate, '%d/%m/%Y') LIKE ? OR
+      DATE_FORMAT(h.ActualReturnDate, '%d/%m/%Y') LIKE ? OR
+
+      -- 🔍 ค้นหาวันที่แบบ พ.ศ.
+      DATE_FORMAT(DATE_ADD(h.BorrowDate, INTERVAL 543 YEAR), '%d/%m/%Y') LIKE ? OR
+      DATE_FORMAT(DATE_ADD(h.ReturnDate, INTERVAL 543 YEAR), '%d/%m/%Y') LIKE ? OR
+      DATE_FORMAT(DATE_ADD(h.ActualReturnDate, INTERVAL 543 YEAR), '%d/%m/%Y') LIKE ?
+    )
+  `;
+
+      params.push(
+        `%${search}%`, // h.AssetName
+        `%${search}%`, // borrower.Name
+        `%${search}%`, // approver.Name
+        `%${search}%`, // receiver.Name
+        `%${search}%`, // rejecter.Name
+        `%${search}%`, // ✅ h.ID (แทน AssetID)
+        `%${search}%`, // s.Status
+        `%${search}%`, // BorrowDate
+        `%${search}%`, // ReturnDate
+        `%${search}%`, // ActualReturnDate
+        `%${search}%`, // BorrowDate (พ.ศ.)
+        `%${search}%`, // ReturnDate (พ.ศ.)
+        `%${search}%` // ActualReturnDate (พ.ศ.)
+      );
+    }
+
+    query += " ORDER BY h.ID ASC";
+
+    const [rows] = await con.promise().query(query, params);
+    res.status(200).json(rows);
+  } catch (error) {
+    console.error("Error fetching all history:", error);
 app.get("/api/pending-requests", async (req, res) => {
   const search = (req.query.search || "").trim().toLowerCase();
 
