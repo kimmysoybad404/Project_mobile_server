@@ -349,11 +349,97 @@ app.get("/history/:userId", async (req, res) => {
   }
 });
 
-app.get("/api/pending-requests", async (req, res) => {
-  const search = (req.query.search || "").trim().toLowerCase();
-
+// ********************************************************************************************************************************
+app.get("/history-all", async (req, res) => {
   try {
+    const search = (req.query.search || "").trim().toLowerCase();
+
     let query = `
+     SELECT 
+        h.ID AS id,
+        h.AssetID AS assetID,
+        h.AssetName AS assetName,
+        CONCAT('assets/images/', s.imageName) AS image,
+        h.BorrowDate,
+        h.ReturnDate,
+        h.ActualReturnDate,
+        h.BorrowBy,
+        h.ApproveBy,
+        h.ReceiveBy,
+        h.RejectBy,
+        h.RejectReason,
+        s.Status AS status, -- ✅ ดึงสถานะจาก storage
+        borrower.Name AS borrowerName,
+        approver.Name AS approverName,
+        receiver.Name AS receiverName,
+        rejecter.Name AS rejecterName
+      FROM history h
+      JOIN storage s ON h.AssetID = s.ID
+      LEFT JOIN userdata borrower ON h.BorrowBy = borrower.UserID
+      LEFT JOIN userdata approver ON h.ApproveBy = approver.UserID
+      LEFT JOIN userdata receiver ON h.ReceiveBy = receiver.UserID
+      LEFT JOIN userdata rejecter ON h.RejectBy = rejecter.UserID
+      WHERE 
+        h.ApproveBy IS NOT NULL
+        OR h.ReceiveBy IS NOT NULL
+        OR h.RejectBy IS NOT NULL
+    `;
+
+    const params = [];
+
+    if (search) {
+      query += `
+    AND (
+      LOWER(h.AssetName) LIKE ? OR
+      LOWER(borrower.Name) LIKE ? OR
+      LOWER(approver.Name) LIKE ? OR
+      LOWER(receiver.Name) LIKE ? OR
+      LOWER(rejecter.Name) LIKE ? OR
+      CAST(h.ID AS CHAR) LIKE ? OR        -- ✅ ใช้แค่ h.ID
+      LOWER(s.Status) LIKE ? OR
+
+      -- 🔍 ค้นหาวันที่แบบ dd/mm/yyyy
+      DATE_FORMAT(h.BorrowDate, '%d/%m/%Y') LIKE ? OR
+      DATE_FORMAT(h.ReturnDate, '%d/%m/%Y') LIKE ? OR
+      DATE_FORMAT(h.ActualReturnDate, '%d/%m/%Y') LIKE ? OR
+
+      -- 🔍 ค้นหาวันที่แบบ พ.ศ.
+      DATE_FORMAT(DATE_ADD(h.BorrowDate, INTERVAL 543 YEAR), '%d/%m/%Y') LIKE ? OR
+      DATE_FORMAT(DATE_ADD(h.ReturnDate, INTERVAL 543 YEAR), '%d/%m/%Y') LIKE ? OR
+      DATE_FORMAT(DATE_ADD(h.ActualReturnDate, INTERVAL 543 YEAR), '%d/%m/%Y') LIKE ?
+    )
+  `;
+
+      params.push(
+        `%${search}%`, // h.AssetName
+        `%${search}%`, // borrower.Name
+        `%${search}%`, // approver.Name
+        `%${search}%`, // receiver.Name
+        `%${search}%`, // rejecter.Name
+        `%${search}%`, // ✅ h.ID (แทน AssetID)
+        `%${search}%`, // s.Status
+        `%${search}%`, // BorrowDate
+        `%${search}%`, // ReturnDate
+        `%${search}%`, // ActualReturnDate
+        `%${search}%`, // BorrowDate (พ.ศ.)
+        `%${search}%`, // ReturnDate (พ.ศ.)
+        `%${search}%` // ActualReturnDate (พ.ศ.)
+      );
+    }
+
+    query += " ORDER BY h.ID ASC";
+
+    const [rows] = await con.promise().query(query, params);
+    res.status(200).json(rows);
+  } catch (error) {
+    console.error("Error fetching all history:", error);
+  }
+}),
+  app.get("/api/pending-requests", async (req, res) => {
+    const search = (req.query.search || "").trim().toLowerCase();
+
+    try {
+      let query = `
       SELECT 
         h.ID AS id,
         h.AssetName AS assetName,
@@ -371,24 +457,27 @@ app.get("/api/pending-requests", async (req, res) => {
         h.ApproveBy IS NULL 
         AND h.RejectBy IS NULL
     `;
-    
-    const params = [];
 
-    if (search) {
-      const searchYear = parseInt(search);
-      let yearAD = null;
-      let yearBE = null;
+      const params = [];
 
-      if (!isNaN(searchYear) && searchYear > 2400) {
-        yearAD = searchYear - 543;
-        yearBE = searchYear;
-      }
-      else if (!isNaN(searchYear) && searchYear > 1900 && searchYear < 2400) {
-        yearAD = searchYear;
-        yearBE = searchYear + 543;
-      }
+      if (search) {
+        const searchYear = parseInt(search);
+        let yearAD = null;
+        let yearBE = null;
 
-      query += `
+        if (!isNaN(searchYear) && searchYear > 2400) {
+          yearAD = searchYear - 543;
+          yearBE = searchYear;
+        } else if (
+          !isNaN(searchYear) &&
+          searchYear > 1900 &&
+          searchYear < 2400
+        ) {
+          yearAD = searchYear;
+          yearBE = searchYear + 543;
+        }
+
+        query += `
         AND (
           LOWER(h.AssetName) LIKE ? OR
           LOWER(h.ID) LIKE ? OR
@@ -407,45 +496,44 @@ app.get("/api/pending-requests", async (req, res) => {
           (YEAR(h.BorrowDate) = ? OR YEAR(h.ReturnDate) = ?)
         )
       `;
-      
-      const searchPattern = `%${search}%`;
-      params.push(
-        searchPattern, // assetName
-        searchPattern, // id
-        searchPattern, // borrowerName
-        searchPattern, // date AD
-        searchPattern, // date AD
-        searchPattern, // date BE
-        searchPattern, // date BE
-        yearAD || -1, // year AD
-        yearAD || -1, // year AD
-        yearBE || -1, // year BE
-        yearBE || -1  // year BE
-      );
+
+        const searchPattern = `%${search}%`;
+        params.push(
+          searchPattern, // assetName
+          searchPattern, // id
+          searchPattern, // borrowerName
+          searchPattern, // date AD
+          searchPattern, // date AD
+          searchPattern, // date BE
+          searchPattern, // date BE
+          yearAD || -1, // year AD
+          yearAD || -1, // year AD
+          yearBE || -1, // year BE
+          yearBE || -1 // year BE
+        );
+      }
+
+      query += " ORDER BY h.BorrowDate ASC, h.ID ASC";
+
+      const [rows] = await con.promise().query(query, params);
+      const results = rows.map((row) => ({
+        ...row,
+        image: row.image.split("/").pop(),
+      }));
+
+      res.json(results);
+    } catch (error) {
+      console.error("Error fetching pending requests:", error);
+      res.status(500).json({ message: "Server error" });
     }
-
-    query += " ORDER BY h.BorrowDate ASC, h.ID ASC";
-
-    const [rows] = await con.promise().query(query, params);
-    const results = rows.map(row => ({
-      ...row,
-      image: row.image.split('/').pop()
-    }));
-    
-    res.json(results);
-
-  } catch (error) {
-    console.error("Error fetching pending requests:", error);
-    res.status(500).json({ message: "Server error" });
-  }
-});
+  });
 
 app.post("/api/requests/:id/approve", async (req, res) => {
   const { id } = req.params;
   const { lenderId } = req.body;
-  
+
   if (!lenderId) {
-     return res.status(400).json({ message: "Lender ID is required" });
+    return res.status(400).json({ message: "Lender ID is required" });
   }
 
   try {
@@ -459,7 +547,9 @@ app.post("/api/requests/:id/approve", async (req, res) => {
     );
 
     if (result.affectedRows === 0) {
-      return res.status(404).json({ message: "Request not found or already processed" });
+      return res
+        .status(404)
+        .json({ message: "Request not found or already processed" });
     }
 
     res.json({ message: "Request approved successfully" });
@@ -474,10 +564,12 @@ app.post("/api/requests/:id/reject", async (req, res) => {
   const { reason, lenderId } = req.body;
 
   if (!lenderId) {
-     return res.status(400).json({ message: "Lender ID is required" });
+    return res.status(400).json({ message: "Lender ID is required" });
   }
   if (!reason || reason.trim() === "") {
-    return res.status(400).json({ message: "Reason is required for rejection" });
+    return res
+      .status(400)
+      .json({ message: "Reason is required for rejection" });
   }
 
   try {
@@ -492,7 +584,9 @@ app.post("/api/requests/:id/reject", async (req, res) => {
     );
 
     if (result.affectedRows === 0) {
-      return res.status(404).json({ message: "Request not found or already processed" });
+      return res
+        .status(404)
+        .json({ message: "Request not found or already processed" });
     }
 
     res.json({ message: "Request rejected successfully" });
