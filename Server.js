@@ -370,6 +370,7 @@ app.get("/history-all", async (req, res) => {
         h.ReceiveBy,
         h.RejectBy,
         h.RejectReason,
+        s.Status AS status, -- ✅ ดึงสถานะจาก storage
         borrower.Name AS borrowerName,
         approver.Name AS approverName,
         receiver.Name AS receiverName,
@@ -396,16 +397,31 @@ app.get("/history-all", async (req, res) => {
           LOWER(approver.Name) LIKE ? OR
           LOWER(receiver.Name) LIKE ? OR
           LOWER(rejecter.Name) LIKE ? OR
-          LOWER(h.ID) LIKE ?
+          LOWER(h.ID) LIKE ? OR
+          LOWER(s.Status) LIKE ? OR
+
+          -- 🔍 ค้นหาวันที่แบบ dd/mm/yyyy
+          DATE_FORMAT(h.BorrowDate, '%d/%m/%Y') LIKE ? OR
+          DATE_FORMAT(h.ReturnDate, '%d/%m/%Y') LIKE ? OR
+          DATE_FORMAT(h.ActualReturnDate, '%d/%m/%Y') LIKE ? OR
+
+          -- 🔍 ค้นหาวันที่แบบ พ.ศ.
+          DATE_FORMAT(DATE_ADD(h.BorrowDate, INTERVAL 543 YEAR), '%d/%m/%Y') LIKE ? OR
+          DATE_FORMAT(DATE_ADD(h.ReturnDate, INTERVAL 543 YEAR), '%d/%m/%Y') LIKE ? OR
+          DATE_FORMAT(DATE_ADD(h.ActualReturnDate, INTERVAL 543 YEAR), '%d/%m/%Y') LIKE ?
         )
       `;
+
       params.push(
-        `%${search}%`,
-        `%${search}%`,
-        `%${search}%`,
-        `%${search}%`,
-        `%${search}%`,
-        `%${search}%`
+        `%${search}%`, // asset name
+        `%${search}%`, // borrower name
+        `%${search}%`, // approver name
+        `%${search}%`, // receiver name
+        `%${search}%`, // rejecter name
+        `%${search}%`, // id
+        `%${search}%`, // status
+        `%${search}%`, `%${search}%`, `%${search}%`, // ค.ศ.
+        `%${search}%`, `%${search}%`, `%${search}%`  // พ.ศ.
       );
     }
 
@@ -418,6 +434,7 @@ app.get("/history-all", async (req, res) => {
     res.status(500).json({ message: "Server error" });
   }
 });
+
 
 
 const PORT = 3000;
