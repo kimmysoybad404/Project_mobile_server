@@ -105,7 +105,6 @@ app.post("/Register", async (req, res) => {
 
 app.get("/storage", (req, res) => {
   const search = req.query.q;
-  console.log("📩 Search received:", search); // ✅ เพิ่มบรรทัดนี้
 
   let sql = "SELECT * FROM storage";
   if (search && search.trim() !== "") {
@@ -117,7 +116,6 @@ app.get("/storage", (req, res) => {
     }
   }
 
-  console.log("🧠 SQL:", sql); // ✅ ดูคำสั่ง SQL จริงที่รัน
 
   con.query(sql, (err, result) => {
     if (err) {
@@ -204,8 +202,6 @@ app.get("/get-status/:id", (req, res) => {
 app.get("/user-requests/:userId", async (req, res) => {
   const { userId } = req.params;
 
-  console.log(`Received request for user ID: ${userId}`);
-
   if (!userId) {
     return res.status(400).json({ message: "User ID is required" });
   }
@@ -234,7 +230,6 @@ app.get("/user-requests/:userId", async (req, res) => {
 
     const [rows] = await con.promise().query(query, [userId]);
 
-    console.log(`Database query returned ${rows.length} rows.`);
     res.json(rows);
   } catch (error) {
     console.error("Error fetching requests:", error);
