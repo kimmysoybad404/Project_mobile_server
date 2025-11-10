@@ -341,13 +341,77 @@ app.get("/history/:userId", async (req, res) => {
 
     query += " ORDER BY h.ID DESC";
 
-    console.log("🧠 SQL:", query);
-    console.log("🧩 Params:", params);
+   
 
     const [rows] = await con.promise().query(query, params);
     res.json(rows);
   } catch (error) {
     console.error("Error fetching history:", error);
+    res.status(500).json({ message: "Server error" });
+  }
+});
+
+
+app.get("/history-all", async (req, res) => {
+  try {
+    const search = (req.query.search || "").trim().toLowerCase();
+
+    let query = `
+      SELECT 
+        h.ID AS id,
+        h.AssetID AS assetID,
+        h.AssetName AS assetName,
+        CONCAT('assets/images/', s.imageName) AS image,
+        h.BorrowDate,
+        h.ReturnDate,
+        h.ActualReturnDate,
+        h.BorrowBy,
+        h.ApproveBy,
+        h.ReceiveBy,
+        h.RejectBy,
+        h.RejectReason,
+        borrower.Name AS borrowerName,
+        approver.Name AS approverName,
+        receiver.Name AS receiverName,
+        rejecter.Name AS rejecterName
+      FROM history h
+      JOIN storage s ON h.AssetID = s.ID
+      LEFT JOIN userdata borrower ON h.BorrowBy = borrower.UserID
+      LEFT JOIN userdata approver ON h.ApproveBy = approver.UserID
+      LEFT JOIN userdata receiver ON h.ReceiveBy = receiver.UserID
+      LEFT JOIN userdata rejecter ON h.RejectBy = rejecter.UserID
+      WHERE 1
+    `;
+
+    const params = [];
+
+    if (search) {
+      query += `
+        AND (
+          LOWER(h.AssetName) LIKE ? OR
+          LOWER(borrower.Name) LIKE ? OR
+          LOWER(approver.Name) LIKE ? OR
+          LOWER(receiver.Name) LIKE ? OR
+          LOWER(rejecter.Name) LIKE ? OR
+          LOWER(h.ID) LIKE ?
+        )
+      `;
+      params.push(
+        `%${search}%`,
+        `%${search}%`,
+        `%${search}%`,
+        `%${search}%`,
+        `%${search}%`,
+        `%${search}%`
+      );
+    }
+
+    query += " ORDER BY h.ID DESC";
+
+    const [rows] = await con.promise().query(query, params);
+    res.status(200).json(rows);
+  } catch (error) {
+    console.error("Error fetching all history:", error);
     res.status(500).json({ message: "Server error" });
   }
 });
