@@ -4,6 +4,7 @@ const con = mysql.createConnection({
   user: "root",
   password: "",
   database: "asset_borrowing",
+  multipleStatements: true
 });
 
 con.connect((err) => {
