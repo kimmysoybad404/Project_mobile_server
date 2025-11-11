@@ -515,8 +515,6 @@ app.get("/history/lender/:userId", async (req, res) => {
       };
     });
 
-    console.log(formatted);
-
     res.status(200).json(formatted);
   } catch (error) {
     console.error("Error fetching lender history:", error);
@@ -623,12 +621,29 @@ app.post("/api/requests/:id/approve", async (req, res) => {
 
   try {
     const [result] = await con.promise().query(
-      `UPDATE history 
-       SET 
-         ApproveBy = ? 
-       WHERE 
-         ID = ? AND ApproveBy IS NULL AND RejectBy IS NULL`,
-      [lenderId, id]
+      `START TRANSACTION;
+
+        UPDATE history
+          SET 
+            ApproveBy = ? -- [Approver ID]
+          WHERE 
+            ID = ? -- [History ID]
+            AND ApproveBy IS NULL 
+            AND RejectBy IS NULL;
+
+        UPDATE storage
+          SET 
+            status = 'Borrowed'
+          WHERE 
+            ID = (
+              SELECT assetid 
+              FROM history 
+              WHERE ID = ? -- [Same History ID]
+                AND ApproveBy = ? -- [Same Approver ID]
+            );
+
+      COMMIT;`,
+      [lenderId, id, id, lenderId]
     );
 
     if (result.affectedRows === 0) {
@@ -659,13 +674,30 @@ app.post("/api/requests/:id/reject", async (req, res) => {
 
   try {
     const [result] = await con.promise().query(
-      `UPDATE history 
-       SET 
-         RejectBy = ?, 
-         RejectReason = ?
-       WHERE 
-         ID = ? AND ApproveBy IS NULL AND RejectBy IS NULL`,
-      [lenderId, reason, id]
+      `START TRANSACTION;
+
+        UPDATE history
+          SET 
+            RejectBy = ?, -- [Approver ID]
+            RejectReason = ?
+          WHERE 
+            ID = ? -- [History ID]
+            AND ApproveBy IS NULL 
+            AND RejectBy IS NULL;
+
+        UPDATE storage
+          SET 
+            status = 'Available'
+          WHERE 
+            ID = (
+              SELECT assetid 
+              FROM history 
+              WHERE ID = ? -- [Same History ID]
+                AND RejectBy = ? -- [Same Approver ID]
+            );
+
+      COMMIT;`,
+      [lenderId, reason, id, id, lenderId]
     );
 
     if (result.affectedRows === 0) {
