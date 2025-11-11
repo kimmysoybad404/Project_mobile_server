@@ -104,26 +104,9 @@ app.post("/Register", async (req, res) => {
 });
 
 app.get("/storage", (req, res) => {
-  const search = req.query.q;
-  console.log("📩 Search received:", search); // ✅ เพิ่มบรรทัดนี้
-
-  let sql = "SELECT * FROM storage";
-  if (search && search.trim() !== "") {
-    const searchNumber = parseInt(search);
-    if (!isNaN(searchNumber)) {
-      sql += ` WHERE ID = ${searchNumber} OR Name LIKE '%${search}%'`;
-    } else {
-      sql += ` WHERE Name LIKE '%${search}%'`;
-    }
-  }
-
-  console.log("🧠 SQL:", sql); // ✅ ดูคำสั่ง SQL จริงที่รัน
-
+  const sql = "SELECT * FROM storage";
   con.query(sql, (err, result) => {
-    if (err) {
-      console.error("Database error:", err);
-      return res.status(500).json({ message: "Database error", error: err });
-    }
+    if (err) return res.status(500).json({ Message: "Database error" });
     res.status(200).json(result);
   });
 });
@@ -137,7 +120,7 @@ app.post("/update-storage", async (req, res) => {
 
   try {
     const checkPending =
-      "SELECT * FROM `history` WHERE `BorrowBy` = ? AND DATE(Borrowdate) = CURDATE()";
+      "SELECT * FROM `history` WHERE `BorrowBy` = ? AND `Borrowdate` = CURDATE()";
     const [checkResults] = await con.promise().query(checkPending, [borrowBy]);
 
     if (checkResults.length == 0) {
@@ -149,12 +132,15 @@ app.post("/update-storage", async (req, res) => {
 
       if (updateResults.affectedRows > 0) {
         const historyQuery = `
-  INSERT INTO history (AssetID, AssetName, BorrowDate, ReturnDate, BorrowBy)
-  VALUES (?, (SELECT Name FROM storage WHERE ID = ?), ?, ?, ?)
-`;
+        INSERT INTO \`history\` 
+          (\`AssetID\`, \`BorrowDate\`, \`ReturnDate\`, \`BorrowBy\`) 
+        VALUES 
+          (?, ?, ?, ?);
+      `;
+
         await con
           .promise()
-          .query(historyQuery, [id, id, borrowDate, returnDate, borrowBy]);
+          .query(historyQuery, [id, borrowDate, returnDate, borrowBy]);
         return res.json({
           message: "Update successful and history logged",
           affectedRows: updateResults.affectedRows,
@@ -204,8 +190,6 @@ app.get("/get-status/:id", (req, res) => {
 app.get("/user-requests/:userId", async (req, res) => {
   const { userId } = req.params;
 
-  console.log(`Received request for user ID: ${userId}`);
-
   if (!userId) {
     return res.status(400).json({ message: "User ID is required" });
   }
@@ -216,12 +200,10 @@ app.get("/user-requests/:userId", async (req, res) => {
         h.ID AS id,
         h.AssetID AS assetID,
         h.AssetName AS assetName,
-        
         CONCAT('assets/images/', s.imageName) AS image, 
-        
         h.BorrowDate,
         h.ReturnDate,
-        h.ActualReturnDate,
+        h.ActualReturnDate, /* ✅ เพิ่มบรรทัดนี้ */
         h.BorrowBy,
         h.ApproveBy,
         h.ReceiveBy,
@@ -229,12 +211,12 @@ app.get("/user-requests/:userId", async (req, res) => {
         h.RejectReason
       FROM history h
       JOIN storage s ON h.AssetID = s.ID
-      WHERE h.BorrowBy = ? AND h.BorrowDate = CURDATE()
+      WHERE 
+        h.BorrowBy = ? 
+        AND (h.ApproveBy IS NULL AND h.ReceiveBy IS NULL AND h.RejectBy IS NULL)
     `;
 
     const [rows] = await con.promise().query(query, [userId]);
-
-    console.log(`Database query returned ${rows.length} rows.`);
     res.json(rows);
   } catch (error) {
     console.error("Error fetching requests:", error);
@@ -242,17 +224,16 @@ app.get("/user-requests/:userId", async (req, res) => {
   }
 });
 
-// **************************************************************************************************************************************************************
-
 app.get("/history/:userId", async (req, res) => {
   const { userId } = req.params;
-  const search = (req.query.search || "").trim().toLowerCase();
-
+  const { search } = req.query; 
+  
   if (!userId) {
     return res.status(400).json({ message: "User ID is required" });
   }
 
   try {
+    let queryParams = [userId]; 
     let query = `
       SELECT 
         h.ID AS id,
@@ -261,7 +242,7 @@ app.get("/history/:userId", async (req, res) => {
         CONCAT('assets/images/', s.imageName) AS image,
         h.BorrowDate,
         h.ReturnDate,
-        h.ActualReturnDate,
+        h.ActualReturnDate, /* ✅ เพิ่มบรรทัดนี้ */
         h.BorrowBy,
         h.ApproveBy,
         h.ReceiveBy,
@@ -276,82 +257,81 @@ app.get("/history/:userId", async (req, res) => {
       LEFT JOIN userdata receiver ON h.ReceiveBy = receiver.UserID
       LEFT JOIN userdata rejecter ON h.RejectBy = rejecter.UserID
       WHERE 
-        h.BorrowBy = ?
+        h.BorrowBy = ? 
         AND (h.ApproveBy IS NOT NULL OR h.ReceiveBy IS NOT NULL OR h.RejectBy IS NOT NULL)
     `;
 
-    const params = [userId];
-
-    // ✅ ถ้ามีการค้นหา
-    if (search) {
-      const searchYear = parseInt(search);
-      let yearAD = null;
-      let yearBE = null;
-
-      // 🔹 ถ้าเป็นปี พ.ศ. → แปลงเป็น ค.ศ.
-      if (!isNaN(searchYear) && searchYear > 2400) {
-        yearAD = searchYear - 543;
-        yearBE = searchYear;
-      }
-      // 🔹 ถ้าเป็นปี ค.ศ. → แปลงเป็น พ.ศ.
-      else if (!isNaN(searchYear) && searchYear > 1900 && searchYear < 2400) {
-        yearAD = searchYear;
-        yearBE = searchYear + 543;
-      }
-
-      query += `
-        AND (
-          LOWER(h.AssetName) LIKE ? OR
-          LOWER(h.ID) LIKE ? OR
-
-          -- ✅ ค้นหาวันที่แบบ dd/mm/yyyy (ค.ศ.)
-          DATE_FORMAT(h.BorrowDate, '%d/%m/%Y') LIKE ? OR
-          DATE_FORMAT(h.ReturnDate, '%d/%m/%Y') LIKE ? OR
-          DATE_FORMAT(h.ActualReturnDate, '%d/%m/%Y') LIKE ? OR
-          
-
-          -- ✅ ค้นหาวันที่แบบ dd/mm/yyyy (พ.ศ.)
-          DATE_FORMAT(DATE_ADD(h.BorrowDate, INTERVAL 543 YEAR), '%d/%m/%Y') LIKE ? OR
-          DATE_FORMAT(DATE_ADD(h.ReturnDate, INTERVAL 543 YEAR), '%d/%m/%Y') LIKE ? OR
-          DATE_FORMAT(DATE_ADD(h.ActualReturnDate, INTERVAL 543 YEAR), '%d/%m/%Y') LIKE ? OR
-
-          -- ✅ ค้นหาปี (ทั้ง พ.ศ. / ค.ศ.)
-          YEAR(h.BorrowDate) LIKE ? OR
-          YEAR(h.ReturnDate) LIKE ? OR
-          YEAR(h.ActualReturnDate) LIKE ? OR
-          YEAR(h.BorrowDate) LIKE ? OR
-          YEAR(h.ReturnDate) LIKE ?
-          YEAR(h.ActualReturnDate) LIKE ?
-        )
-      `;
-
-      params.push(
-        `%${search}%`,
-        `%${search}%`, // assetName, id
-        `%${search}%`,
-        `%${search}%`, // ค.ศ.
-        `%${search}%`,
-        `%${search}%`, // พ.ศ.
-        `%${yearAD || searchYear}%`,
-        `%${yearAD || searchYear}%`,
-        `%${yearBE || searchYear}%`,
-        `%${yearBE || searchYear}%`
-      );
+    if (search && search.trim() !== "") {
+      const searchTerm = `%${search.trim()}%`;
+      query += ` AND (h.AssetName LIKE ?)`;
+      queryParams.push(searchTerm);
     }
 
-    query += " ORDER BY h.ID DESC";
+    query += ` ORDER BY h.ID DESC`;
 
-    console.log("🧠 SQL:", query);
-    console.log("🧩 Params:", params);
-
-    const [rows] = await con.promise().query(query, params);
+    const [rows] = await con.promise().query(query, queryParams);
     res.json(rows);
   } catch (error) {
     console.error("Error fetching history:", error);
     res.status(500).json({ message: "Server error" });
   }
 });
+// ✅ ประวัติของผู้ให้ยืม (Lender)
+app.get("/history/lender/:userId", async (req, res) => {
+  const { userId } = req.params;
+  const { search } = req.query; 
 
+  if (!userId) {
+    return res.status(400).json({ message: "User ID is required" });
+  }
+
+  try {
+    let queryParams = [userId, userId];
+    let query = `
+      SELECT 
+        h.ID AS id,
+        h.AssetID AS assetID,
+        h.AssetName AS assetName,
+        CONCAT('assets/images/', s.imageName) AS image,
+        h.BorrowDate,
+        h.ReturnDate,
+        h.ActualReturnDate, /* ✅ เพิ่มบรรทัดนี้ */
+        h.BorrowBy,
+        h.ApproveBy,
+        h.ReceiveBy,
+        h.RejectBy,
+        h.RejectReason,
+        approver.Name AS approverName,
+        receiver.Name AS receiverName,
+        rejecter.Name AS rejecterName,
+        borrower.Name AS borrowerName
+      FROM history h
+      JOIN storage s ON h.AssetID = s.ID
+      LEFT JOIN userdata approver ON h.ApproveBy = approver.UserID
+      LEFT JOIN userdata receiver ON h.ReceiveBy = receiver.UserID
+      LEFT JOIN userdata rejecter ON h.RejectBy = rejecter.UserID
+      LEFT JOIN userdata borrower ON h.BorrowBy = borrower.UserID
+      WHERE 
+        (h.ApproveBy = ? OR h.RejectBy = ?)
+    `;
+
+    if (search && search.trim() !== "") {
+      const searchTerm = `%${search.trim()}%`;
+      query += ` AND (h.AssetName LIKE ? OR borrower.Name LIKE ?)`; 
+      queryParams.push(searchTerm, searchTerm);
+    }
+
+    query += ` ORDER BY h.ID DESC`;
+
+    const [rows] = await con.promise().query(query, queryParams);
+    res.json(rows);
+  } catch (error) {
+    console.error("Error fetching lender history:", error);
+    res.status(500).json({ message: "Server error" });
+  }
+});
+
+// ... (โค้ดเดิมของคุณ) ...
 const PORT = 3000;
 app.listen(PORT, () => {
   console.log(`🚀 Server running at http://localhost:${PORT}`);
