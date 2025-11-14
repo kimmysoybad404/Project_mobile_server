@@ -289,6 +289,80 @@ app.get("/history/:userId", async (req, res) => {
   }
 });
 
+// Add asset to storage
+app.post("/add-storage", async (req, res) => {
+  const { name, status, imageName } = req.body;
+
+  if (!name || !status || !imageName) {
+    return res.status(400).json({ message: "Missing required fields" });
+  }
+
+  try {
+    const sql = "INSERT INTO storage (Name, Status, imageName) VALUES (?, ?, ?)";
+    const [result] = await con.promise().query(sql, [name, status, imageName]);
+    res.status(200).json({ message: "Asset added", insertId: result.insertId });
+  } catch (err) {
+    console.error("Error inserting asset:", err);
+    res.status(500).json({ message: "Server error" });
+  }
+});
+
+// Edit asset in storage
+app.post("/edit-storage", async (req, res) => {
+  const { id, name, status, imageName } = req.body;
+
+  if (!id || !name || !status || !imageName) {
+    return res.status(400).json({ message: "Missing required fields" });
+  }
+
+  try {
+    const sql = `
+      UPDATE storage 
+      SET Name = ?, Status = ?, imageName = ?
+      WHERE ID = ?
+    `;
+
+    const [result] = await con.promise().query(sql, [
+      name,
+      status,
+      imageName,
+      id,
+    ]);
+
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ message: "Asset not found" });
+    }
+
+    res.status(200).json({ message: "Asset updated successfully" });
+  } catch (err) {
+    console.error("Error updating asset:", err);
+    res.status(500).json({ message: "Server error" });
+  }
+});
+
+// Delete asset from storage
+app.post("/delete-storage", async (req, res) => { 
+  const { id } = req.body;
+
+  if (!id) {
+    return res.status(400).json({ message: "Missing asset ID" });
+  }
+
+  try {
+    // Delete asset from storage table
+    const sql = "DELETE FROM storage WHERE ID = ?";
+    const [result] = await con.promise().query(sql, [id]);
+
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ message: "Asset not found" });
+    }
+
+    res.status(200).json({ message: "Asset deleted successfully" });
+  } catch (err) {
+    console.error("Error deleting asset:", err);
+    res.status(500).json({ message: "Server error" });
+  }
+});
 
 app.get("/history-all", async (req, res) => {
   try {
