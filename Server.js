@@ -349,9 +349,14 @@ app.post("/delete-storage", async (req, res) => {
   }
 
   try {
-    // Delete asset from storage table
-    const sql = "DELETE FROM storage WHERE ID = ?";
-    const [result] = await con.promise().query(sql, [id]);
+    // Delete related rows in history first
+    await con.promise().query("DELETE FROM history WHERE AssetID = ?", [id]);
+
+    // Now delete the asset
+    const [result] = await con.promise().query(
+      "DELETE FROM storage WHERE ID = ?",
+      [id]
+    );
 
     if (result.affectedRows === 0) {
       return res.status(404).json({ message: "Asset not found" });
@@ -363,6 +368,7 @@ app.post("/delete-storage", async (req, res) => {
     res.status(500).json({ message: "Server error" });
   }
 });
+
 
 // Recovery assets endpoint
 app.get("/recovery-assets", async (req, res) => {
@@ -397,7 +403,7 @@ app.get("/recovery-assets", async (req, res) => {
 });
 
 
-// Confirm return endpoint - SIMPLIFIED VERSION
+// Confirm return endpoint 
 app.post("/api/confirm-return/:historyId", async (req, res) => {
   const { historyId } = req.params;
   const { staffId } = req.body;
