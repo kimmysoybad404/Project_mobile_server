@@ -341,7 +341,7 @@ app.post("/edit-storage", async (req, res) => {
 });
 
 // Delete asset from storage
-app.post("/delete-storage", async (req, res) => { 
+app.post("/delete-storage", async (req, res) => {
   const { id } = req.body;
 
   if (!id) {
@@ -363,6 +363,117 @@ app.post("/delete-storage", async (req, res) => {
     res.status(500).json({ message: "Server error" });
   }
 });
+
+// Recovery assets endpoint
+app.get("/recovery-assets", async (req, res) => {
+  try {
+    const sql = `
+      SELECT 
+        h.ID AS id,
+        s.ID AS assetId,
+        s.Name AS name,
+        CONCAT('assets/images/', s.imageName) AS image,
+        s.Status AS status,
+        borrower.Name AS borrowBy,
+        h.BorrowDate AS borrowDate,
+        h.ReturnDate AS returnDate
+      FROM storage s
+      JOIN history h ON s.ID = h.AssetID
+      JOIN userdata borrower ON h.BorrowBy = borrower.UserID
+      WHERE 
+        s.Status = 'Borrowed'
+        AND h.ApproveBy IS NOT NULL
+        AND h.ReceiveBy IS NULL
+      ORDER BY h.BorrowDate DESC;
+    `;
+
+    const [rows] = await con.promise().query(sql);
+    res.json(rows);
+
+  } catch (error) {
+    console.error("Error fetching recovery assets:", error);
+    res.status(500).json({ error: "Database query error" });
+  }
+});
+
+
+// Confirm return endpoint - SIMPLIFIED VERSION
+app.post("/api/confirm-return/:historyId", async (req, res) => {
+  const { historyId } = req.params;
+  const { staffId } = req.body;
+
+  console.log(`🔄 Confirm return request for history ID: ${historyId}, staff ID: ${staffId}`);
+
+  if (!staffId) {
+    console.log('❌ Missing staffId');
+    return res.status(400).json({ success: false, message: "Staff ID is required" });
+  }
+
+  try {
+    // Check if the history record exists and hasn't been returned yet
+    const [historyRows] = await con.promise().query(
+      "SELECT AssetID FROM history WHERE ID = ? AND ReceiveBy IS NULL",
+      [historyId]
+    );
+
+    if (historyRows.length === 0) {
+      console.log('❌ Record not found or already returned');
+      return res.status(404).json({ success: false, message: "Record not found or already returned" });
+    }
+
+    const assetId = historyRows[0].AssetID;
+    console.log(`📦 Found asset ID: ${assetId}`);
+
+    // Start transaction manually
+    await con.promise().query("START TRANSACTION");
+
+    try {
+      // Update history: ActualReturnDate = today, ReceiveBy = staffId
+      const [historyResult] = await con.promise().query(
+        `UPDATE history 
+           SET ActualReturnDate = CURDATE(), ReceiveBy = ? 
+         WHERE ID = ?`,
+        [staffId, historyId]
+      );
+
+      console.log(`✅ History updated, affected rows: ${historyResult.affectedRows}`);
+
+      // Update storage status to Available
+      const [storageResult] = await con.promise().query(
+        "UPDATE storage SET Status = 'Available' WHERE ID = ?",
+        [assetId]
+      );
+
+      console.log(`✅ Storage updated, affected rows: ${storageResult.affectedRows}`);
+
+      // Commit transaction
+      await con.promise().query("COMMIT");
+
+      console.log('✅ Transaction committed successfully');
+      
+      res.json({ 
+        success: true, 
+        message: "Return confirmed successfully",
+        assetId: assetId,
+        historyId: historyId
+      });
+
+    } catch (error) {
+      // Rollback transaction on error
+      await con.promise().query("ROLLBACK");
+      throw error;
+    }
+
+  } catch (error) {
+    console.error("❌ Return confirm error:", error);
+    res.status(500).json({ 
+      success: false, 
+      message: "Server error: " + error.message 
+    });
+  }
+});
+
+
 
 app.get("/history-all", async (req, res) => {
   try {
@@ -450,7 +561,7 @@ app.get("/history-all", async (req, res) => {
         term,
         term,
         term,
-        term 
+        term
       );
     }
 
