@@ -1,14 +1,33 @@
 const con = require("./db.js");
 const express = require("express");
-const argon2 = require("argon2");
+const { hash, verify } = require("@node-rs/argon2");
 const app = express();
+const jwt = require("jsonwebtoken");
+const JWT_SECRET = "SuperSecretKeyNaja";
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+function VerifyToken(req, res, next) {
+  const authHeader = req.headers["authorization"];
+  if (!authHeader)
+    return res.status(401).json({ message: "No token provided" });
+
+  const token = authHeader.split(" ")[1];
+  if (!token) return res.status(401).json({ message: "Invalid token format" });
+
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET);
+    req.user = decoded;
+    next();
+  } catch (error) {
+    return res.status(403).json({ message: "Invalid or expired token" });
+  }
+}
+
 app.get("/password/:pass", async (req, res) => {
   try {
-    const hashed = await argon2.hash(req.params.pass);
+    const hashed = await hash(req.params.pass);
     res.send(hashed);
   } catch (err) {
     console.error(err);
@@ -23,30 +42,28 @@ app.post("/Login", (req, res) => {
     "SELECT * FROM userdata WHERE Username = ?",
     [username],
     async (err, result) => {
-      if (err) return res.status(500).json({ Message: "Database error" });
+      if (err) return res.status(500).json({ message: "Database error" });
       if (result.length === 0)
-        return res.status(400).json({ Message: "User not found" });
+        return res.status(400).json({ message: "User not found" });
 
       const user = result[0];
 
-      try {
-        const valid = await argon2.verify(user.Password, password);
+      const valid = await verify(user.Password, password);
+      if (!valid)
+        return res.status(400).json({ message: "Incorrect Password" });
 
-        if (!valid)
-          return res.status(400).json({ Message: "Incorrect Password" });
+      const payload = {
+        id: user.UserID,
+        name: user.Name,
+        role: user.Role,
+      };
 
-        res.json({
-          Message: "Login Successful",
-          user: {
-            id: user.UserID,
-            name: user.Name,
-            role: Number(user.Role),
-          },
-        });
-      } catch (error) {
-        console.error("Argon2 verify error:", error);
-        res.status(500).json({ Message: "Password verification failed" });
-      }
+      const token = jwt.sign(payload, JWT_SECRET, { expiresIn: "1d" });
+
+      return res.json({
+        message: "Login successful",
+        token: token,
+      });
     }
   );
 });
@@ -67,7 +84,7 @@ app.post("/Register", async (req, res) => {
         if (result.length > 0)
           return res.status(400).json({ Message: "Username already exists" });
 
-        const hashedPassword = await argon2.hash(password);
+        const hashedPassword = await hash(password);
         const role = 1;
 
         con.query(
@@ -91,7 +108,7 @@ app.post("/Register", async (req, res) => {
   }
 });
 
-app.get("/storage", (req, res) => {
+app.get("/storage", VerifyToken, (req, res) => {
   const search = req.query.q;
 
   let sql = "SELECT * FROM storage";
@@ -110,7 +127,7 @@ app.get("/storage", (req, res) => {
   });
 });
 
-app.post("/update-storage", async (req, res) => {
+app.post("/update-storage", VerifyToken, async (req, res) => {
   const { id, status, borrowDate, returnDate, borrowBy } = req.body;
 
   if (!id || !status || !borrowDate || !returnDate || !borrowBy) {
@@ -165,7 +182,7 @@ app.post("/update-storage", async (req, res) => {
   }
 });
 
-app.get("/get-status/:id", (req, res) => {
+app.get("/get-status/:id", VerifyToken, (req, res) => {
   const { id } = req.params;
 
   con.query(
@@ -186,7 +203,7 @@ app.get("/get-status/:id", (req, res) => {
   );
 });
 
-app.get("/user-requests/:userId", async (req, res) => {
+app.get("/user-requests/:userId", VerifyToken, async (req, res) => {
   const { userId } = req.params;
 
   if (!userId) {
@@ -224,7 +241,7 @@ app.get("/user-requests/:userId", async (req, res) => {
   }
 });
 
-app.get("/history/:userId", async (req, res) => {
+app.get("/history/:userId", VerifyToken, async (req, res) => {
   const { userId } = req.params;
   const { search } = req.query;
 
@@ -278,7 +295,7 @@ app.get("/history/:userId", async (req, res) => {
 });
 
 // Add asset to storage
-app.post("/add-storage", async (req, res) => {
+app.post("/add-storage", VerifyToken, async (req, res) => {
   const { name, status, imageName } = req.body;
 
   if (!name || !status || !imageName) {
@@ -297,7 +314,7 @@ app.post("/add-storage", async (req, res) => {
 });
 
 // Edit asset in storage
-app.post("/edit-storage", async (req, res) => {
+app.post("/edit-storage", VerifyToken, async (req, res) => {
   const { id, name, status, imageName } = req.body;
 
   if (!id || !name || !status || !imageName) {
@@ -327,7 +344,7 @@ app.post("/edit-storage", async (req, res) => {
 });
 
 // Delete asset from storage
-app.post("/delete-storage", async (req, res) => {
+app.post("/delete-storage", VerifyToken, async (req, res) => {
   const { id } = req.body;
 
   if (!id) {
@@ -355,7 +372,7 @@ app.post("/delete-storage", async (req, res) => {
 });
 
 // Recovery assets endpoint
-app.get("/recovery-assets", async (req, res) => {
+app.get("/recovery-assets", VerifyToken, async (req, res) => {
   try {
     const sql = `
       SELECT 
@@ -386,7 +403,7 @@ app.get("/recovery-assets", async (req, res) => {
 });
 
 // Confirm return endpoint
-app.post("/api/confirm-return/:historyId", async (req, res) => {
+app.post("/api/confirm-return/:historyId", VerifyToken, async (req, res) => {
   const { historyId } = req.params;
   const { staffId } = req.body;
 
@@ -472,7 +489,7 @@ app.post("/api/confirm-return/:historyId", async (req, res) => {
   }
 });
 
-app.get("/history-all", async (req, res) => {
+app.get("/history-all", VerifyToken, async (req, res) => {
   try {
     const search = (req.query.search || "").trim().toLowerCase();
 
@@ -590,7 +607,7 @@ app.get("/history-all", async (req, res) => {
   }
 });
 
-app.get("/history/lender/:userId", async (req, res) => {
+app.get("/history/lender/:userId", VerifyToken, async (req, res) => {
   const { userId } = req.params;
   const search = (req.query.search || "").trim().toLowerCase();
 
@@ -704,7 +721,7 @@ app.get("/history/lender/:userId", async (req, res) => {
   }
 });
 
-app.get("/api/pending-requests", async (req, res) => {
+app.get("/api/pending-requests", VerifyToken, async (req, res) => {
   const search = (req.query.search || "").trim().toLowerCase();
 
   try {
@@ -793,7 +810,7 @@ app.get("/api/pending-requests", async (req, res) => {
   }
 });
 
-app.post("/api/requests/:id/approve", async (req, res) => {
+app.post("/api/requests/:id/approve", VerifyToken, async (req, res) => {
   const { id } = req.params;
   const { lenderId } = req.body;
 
@@ -841,7 +858,7 @@ app.post("/api/requests/:id/approve", async (req, res) => {
   }
 });
 
-app.post("/api/requests/:id/reject", async (req, res) => {
+app.post("/api/requests/:id/reject", VerifyToken, async (req, res) => {
   const { id } = req.params;
   const { reason, lenderId } = req.body;
 
