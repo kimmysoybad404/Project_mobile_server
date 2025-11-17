@@ -579,7 +579,7 @@ app.get("/history-all", VerifyToken, async (req, res) => {
       );
     }
 
-    query += " ORDER BY h.ID ASC";
+    query += " ORDER BY h.ID DESC";
 
     const [rows] = await con.promise().query(query, params);
 
@@ -693,7 +693,7 @@ app.get("/history/lender/:userId", VerifyToken, async (req, res) => {
       );
     }
 
-    query += " ORDER BY h.ID ASC";
+    query += " ORDER BY h.ID DESC";
 
     const [rows] = await con.promise().query(query, params);
 
