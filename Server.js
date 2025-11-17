@@ -1,7 +1,6 @@
 const con = require("./db.js");
 const express = require("express");
-const session = require("express-session");
-const { hash, verify } = require("@node-rs/argon2");
+const argon2 = require("argon2");
 const app = express();
 
 app.use(express.json());
@@ -9,12 +8,7 @@ app.use(express.urlencoded({ extended: true }));
 
 app.get("/password/:pass", async (req, res) => {
   try {
-    const hashed = await hash(req.params.pass, {
-      type: 2,
-      memoryCost: 2 ** 16,
-      timeCost: 3,
-      parallelism: 1,
-    });
+    const hashed = await argon2.hash(req.params.pass);
     res.send(hashed);
   } catch (err) {
     console.error(err);
@@ -36,7 +30,7 @@ app.post("/Login", (req, res) => {
       const user = result[0];
 
       try {
-        const valid = await verify(user.Password, password);
+        const valid = await argon2.verify(user.Password, password);
 
         if (!valid)
           return res.status(400).json({ Message: "Incorrect Password" });
@@ -73,13 +67,7 @@ app.post("/Register", async (req, res) => {
         if (result.length > 0)
           return res.status(400).json({ Message: "Username already exists" });
 
-        const hashedPassword = await hash(password, {
-          type: 2,
-          memoryCost: 2 ** 16,
-          timeCost: 3,
-          parallelism: 1,
-        });
-
+        const hashedPassword = await argon2.hash(password);
         const role = 1;
 
         con.query(
@@ -298,7 +286,8 @@ app.post("/add-storage", async (req, res) => {
   }
 
   try {
-    const sql = "INSERT INTO storage (Name, Status, imageName) VALUES (?, ?, ?)";
+    const sql =
+      "INSERT INTO storage (Name, Status, imageName) VALUES (?, ?, ?)";
     const [result] = await con.promise().query(sql, [name, status, imageName]);
     res.status(200).json({ message: "Asset added", insertId: result.insertId });
   } catch (err) {
@@ -322,12 +311,9 @@ app.post("/edit-storage", async (req, res) => {
       WHERE ID = ?
     `;
 
-    const [result] = await con.promise().query(sql, [
-      name,
-      status,
-      imageName,
-      id,
-    ]);
+    const [result] = await con
+      .promise()
+      .query(sql, [name, status, imageName, id]);
 
     if (result.affectedRows === 0) {
       return res.status(404).json({ message: "Asset not found" });
@@ -353,10 +339,9 @@ app.post("/delete-storage", async (req, res) => {
     await con.promise().query("DELETE FROM history WHERE AssetID = ?", [id]);
 
     // Now delete the asset
-    const [result] = await con.promise().query(
-      "DELETE FROM storage WHERE ID = ?",
-      [id]
-    );
+    const [result] = await con
+      .promise()
+      .query("DELETE FROM storage WHERE ID = ?", [id]);
 
     if (result.affectedRows === 0) {
       return res.status(404).json({ message: "Asset not found" });
@@ -368,7 +353,6 @@ app.post("/delete-storage", async (req, res) => {
     res.status(500).json({ message: "Server error" });
   }
 });
-
 
 // Recovery assets endpoint
 app.get("/recovery-assets", async (req, res) => {
@@ -395,36 +379,42 @@ app.get("/recovery-assets", async (req, res) => {
 
     const [rows] = await con.promise().query(sql);
     res.json(rows);
-
   } catch (error) {
     console.error("Error fetching recovery assets:", error);
     res.status(500).json({ error: "Database query error" });
   }
 });
 
-
-// Confirm return endpoint 
+// Confirm return endpoint
 app.post("/api/confirm-return/:historyId", async (req, res) => {
   const { historyId } = req.params;
   const { staffId } = req.body;
 
-  console.log(`🔄 Confirm return request for history ID: ${historyId}, staff ID: ${staffId}`);
+  console.log(
+    `🔄 Confirm return request for history ID: ${historyId}, staff ID: ${staffId}`
+  );
 
   if (!staffId) {
-    console.log('❌ Missing staffId');
-    return res.status(400).json({ success: false, message: "Staff ID is required" });
+    console.log("❌ Missing staffId");
+    return res
+      .status(400)
+      .json({ success: false, message: "Staff ID is required" });
   }
 
   try {
     // Check if the history record exists and hasn't been returned yet
-    const [historyRows] = await con.promise().query(
-      "SELECT AssetID FROM history WHERE ID = ? AND ReceiveBy IS NULL",
-      [historyId]
-    );
+    const [historyRows] = await con
+      .promise()
+      .query("SELECT AssetID FROM history WHERE ID = ? AND ReceiveBy IS NULL", [
+        historyId,
+      ]);
 
     if (historyRows.length === 0) {
-      console.log('❌ Record not found or already returned');
-      return res.status(404).json({ success: false, message: "Record not found or already returned" });
+      console.log("❌ Record not found or already returned");
+      return res.status(404).json({
+        success: false,
+        message: "Record not found or already returned",
+      });
     }
 
     const assetId = historyRows[0].AssetID;
@@ -442,44 +432,45 @@ app.post("/api/confirm-return/:historyId", async (req, res) => {
         [staffId, historyId]
       );
 
-      console.log(`✅ History updated, affected rows: ${historyResult.affectedRows}`);
-
-      // Update storage status to Available
-      const [storageResult] = await con.promise().query(
-        "UPDATE storage SET Status = 'Available' WHERE ID = ?",
-        [assetId]
+      console.log(
+        `✅ History updated, affected rows: ${historyResult.affectedRows}`
       );
 
-      console.log(`✅ Storage updated, affected rows: ${storageResult.affectedRows}`);
+      // Update storage status to Available
+      const [storageResult] = await con
+        .promise()
+        .query("UPDATE storage SET Status = 'Available' WHERE ID = ?", [
+          assetId,
+        ]);
+
+      console.log(
+        `✅ Storage updated, affected rows: ${storageResult.affectedRows}`
+      );
 
       // Commit transaction
       await con.promise().query("COMMIT");
 
-      console.log('✅ Transaction committed successfully');
-      
-      res.json({ 
-        success: true, 
+      console.log("✅ Transaction committed successfully");
+
+      res.json({
+        success: true,
         message: "Return confirmed successfully",
         assetId: assetId,
-        historyId: historyId
+        historyId: historyId,
       });
-
     } catch (error) {
       // Rollback transaction on error
       await con.promise().query("ROLLBACK");
       throw error;
     }
-
   } catch (error) {
     console.error("❌ Return confirm error:", error);
-    res.status(500).json({ 
-      success: false, 
-      message: "Server error: " + error.message 
+    res.status(500).json({
+      success: false,
+      message: "Server error: " + error.message,
     });
   }
 });
-
-
 
 app.get("/history-all", async (req, res) => {
   try {
