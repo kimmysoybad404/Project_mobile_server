@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Host: 127.0.0.1
--- Generation Time: Nov 07, 2025 at 02:22 PM
+-- Generation Time: Nov 17, 2025 at 10:34 PM
 -- Server version: 10.4.32-MariaDB
 -- PHP Version: 8.2.12
 
@@ -47,8 +47,9 @@ CREATE TABLE `history` (
 
 INSERT INTO `history` (`ID`, `AssetID`, `AssetName`, `BorrowDate`, `ReturnDate`, `ActualReturnDate`, `BorrowBy`, `ApproveBy`, `ReceiveBy`, `RejectBy`, `RejectReason`) VALUES
 (31, 1, 'Notebook', '2025-11-02', '2025-11-03', NULL, 4, NULL, NULL, 0, 'Auto-rejected: Request expired'),
-(32, 12, 'Powerbank', '2025-11-01', '2025-11-02', NULL, 4, NULL, NULL, 0, 'Auto-rejected: Request expired'),
-(39, 8, 'Ipad', '2025-11-04', '2025-11-05', NULL, 4, 5, NULL, NULL, NULL);
+(39, 8, 'Ipad', '2025-11-04', '2025-11-05', NULL, 4, 5, NULL, NULL, NULL),
+(40, 6, 'Boardgame', '2025-11-07', '2025-11-08', NULL, 4, 5, 6, NULL, NULL),
+(43, 11, 'IPhone 17 pro max', '2025-11-18', '2025-11-19', NULL, 4, 5, NULL, NULL, NULL);
 
 --
 -- Triggers `history`
@@ -72,7 +73,7 @@ CREATE TABLE `storage` (
   `ID` smallint(5) UNSIGNED NOT NULL,
   `Name` varchar(20) NOT NULL,
   `imageName` varchar(255) NOT NULL,
-  `Status` enum('Available','Borrowed','Pending','Disabled') NOT NULL
+  `Status` enum('Available','Borrowed','Pending','Disabled','Deleted') NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --
@@ -85,13 +86,12 @@ INSERT INTO `storage` (`ID`, `Name`, `imageName`, `Status`) VALUES
 (3, 'Apple_pencil_2', 'apple_pencil_2.png', 'Disabled'),
 (4, 'Apple_pencil_3', 'apple_pencil_3.png', 'Borrowed'),
 (5, 'Board_games', 'Board_games.png', 'Pending'),
-(6, 'Boardgame', 'boardgame.png', 'Available'),
-(7, 'Camera', 'Camera.png', 'Available'),
+(6, 'Boardgame', 'boardgame.png', 'Pending'),
 (8, 'Ipad', 'ipad.png', 'Pending'),
-(9, 'Mouse', 'Mouse.png', 'Available'),
-(10, 'Phone', 'Phone.png', 'Available'),
-(11, 'Phone_2', 'Phone_2.png', 'Available'),
-(12, 'Powerbank', 'powerbank.png', 'Available');
+(9, 'logitech gaming G36', 'Mouse.png', 'Available'),
+(10, 'IPhone 17', 'Phone.png', 'Available'),
+(11, 'IPhone 17 pro max', 'Phone_2.png', 'Borrowed'),
+(24, 'Acer gaming', 'notebook.png', 'Available');
 
 -- --------------------------------------------------------
 
@@ -153,13 +153,13 @@ ALTER TABLE `userdata`
 -- AUTO_INCREMENT for table `history`
 --
 ALTER TABLE `history`
-  MODIFY `ID` smallint(5) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=40;
+  MODIFY `ID` smallint(5) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=44;
 
 --
 -- AUTO_INCREMENT for table `storage`
 --
 ALTER TABLE `storage`
-  MODIFY `ID` smallint(5) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=24;
+  MODIFY `ID` smallint(5) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=25;
 
 --
 -- AUTO_INCREMENT for table `userdata`
