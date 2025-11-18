@@ -343,7 +343,7 @@ app.post("/edit-storage", VerifyToken, async (req, res) => {
   }
 });
 
-// Delete asset from storage
+// Soft delete asset from storage (change status to 'Deleted')
 app.post("/delete-storage", VerifyToken, async (req, res) => {
   const { id } = req.body;
 
@@ -352,13 +352,10 @@ app.post("/delete-storage", VerifyToken, async (req, res) => {
   }
 
   try {
-    // Delete related rows in history first
-    await con.promise().query("DELETE FROM history WHERE AssetID = ?", [id]);
-
-    // Now delete the asset
+    // Soft delete: update status to 'Deleted' instead of removing the record
     const [result] = await con
       .promise()
-      .query("DELETE FROM storage WHERE ID = ?", [id]);
+      .query("UPDATE storage SET Status = 'Deleted' WHERE ID = ?", [id]);
 
     if (result.affectedRows === 0) {
       return res.status(404).json({ message: "Asset not found" });
@@ -488,6 +485,8 @@ app.post("/api/confirm-return/:historyId", VerifyToken, async (req, res) => {
     });
   }
 });
+
+
 
 app.get("/history-all", VerifyToken, async (req, res) => {
   try {
